@@ -2,7 +2,7 @@
   "name": "CBT Admin Control Panel",
   "short_name": "CBT Admin",
   "description": "Feedback, Today's Challenge, Results, CSV Upload, and Live Monitoring for the CBT Assessment Platform",
-  "start_url": "./admin_dashboard.html",
+  "start_url": "./",
   "scope": "./",
   "display": "standalone",
   "orientation": "portrait-primary",
