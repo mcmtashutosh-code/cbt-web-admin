@@ -654,7 +654,14 @@ async function rpc(fn, body){
     headers:{ 'apikey':SUPABASE_KEY, 'Authorization':`Bearer ${SUPABASE_KEY}`, 'Content-Type':'application/json' },
     body: JSON.stringify(body)
   });
-  if (!res.ok) throw new Error(`RPC failed (${res.status})`);
+  if (!res.ok){
+    let detail = `HTTP ${res.status}`;
+    try{
+      const errJson = await res.json();
+      detail = errJson.message || errJson.hint || errJson.details || detail;
+    }catch(e){ /* response wasn't JSON */ }
+    throw new Error(detail);
+  }
   return res.json();
 }
 
@@ -1334,11 +1341,11 @@ document.getElementById('btn-up-practice').addEventListener('click', async () =>
       });
     }
     if (!payload.length){ statusEl.textContent = 'No valid rows found in the CSV file.'; return; }
-    const count = await rpc('admin_upload_practice_questions', { p_admin_id: admin.adminId, p_admin_pass: admin.adminPass, p_mode: getPracticeMode(), p_data: JSON.stringify(payload) });
+    const count = await rpc('admin_upload_practice_questions', { p_admin_id: admin.adminId, p_admin_pass: admin.adminPass, p_mode: getPracticeMode(), p_data: payload });
     if (count >= 0){ toast(`${count} practice question(s) uploaded.`, 'ok'); fileInput.value = ''; }
     else statusEl.textContent = 'Upload failed. Please try again.';
   }catch(err){
-    statusEl.textContent = 'Unable to process this file. Please check the format and try again.';
+    statusEl.textContent = 'Unable to process this file: ' + (err.message || 'unknown error') + '. Please check the format and try again.';
   }finally{
     btn.disabled = false; btn.textContent = '📤 Upload practice questions';
   }
@@ -1366,11 +1373,11 @@ document.getElementById('btn-up-exam').addEventListener('click', async () => {
       });
     }
     if (!payload.length){ statusEl.textContent = 'No valid rows found in the CSV file.'; return; }
-    const count = await rpc('admin_upload_exam_questions', { p_admin_id: admin.adminId, p_admin_pass: admin.adminPass, p_mode: getExamMode(), p_data: JSON.stringify(payload) });
+    const count = await rpc('admin_upload_exam_questions', { p_admin_id: admin.adminId, p_admin_pass: admin.adminPass, p_mode: getExamMode(), p_data: payload });
     if (count >= 0){ toast(`${count} exam question(s) uploaded.`, 'ok'); fileInput.value = ''; }
     else statusEl.textContent = 'Upload failed. Please try again.';
   }catch(err){
-    statusEl.textContent = 'Unable to process this file. Please check the format and try again.';
+    statusEl.textContent = 'Unable to process this file: ' + (err.message || 'unknown error') + '. Please check the format and try again.';
   }finally{
     btn.disabled = false; btn.textContent = '📤 Upload exam questions';
   }
@@ -1399,7 +1406,7 @@ document.getElementById('btn-up-students').addEventListener('click', async () =>
       payload.push({ mobile, name, password });
     }
     if (!payload.length){ statusEl.textContent = 'No valid rows found in the CSV file.'; return; }
-    const count = await rpc('admin_upload_students', { p_admin_id: admin.adminId, p_admin_pass: admin.adminPass, p_mode: getStudentsMode(), p_data: JSON.stringify(payload) });
+    const count = await rpc('admin_upload_students', { p_admin_id: admin.adminId, p_admin_pass: admin.adminPass, p_mode: getStudentsMode(), p_data: payload });
     if (count >= 0){
       let msg = `${count} student(s) uploaded. Password format: first 2 letters of name + last 4 digits of mobile.`;
       if (skipped.length) msg += ` ${skipped.length} row(s) skipped (invalid mobile).`;
@@ -1407,7 +1414,7 @@ document.getElementById('btn-up-students').addEventListener('click', async () =>
       fileInput.value = '';
     } else statusEl.textContent = 'Upload failed. Please try again.';
   }catch(err){
-    statusEl.textContent = 'Unable to process this file. Please check the format and try again.';
+    statusEl.textContent = 'Unable to process this file: ' + (err.message || 'unknown error') + '. Please check the format and try again.';
   }finally{
     btn.disabled = false; btn.textContent = '📤 Upload students';
   }
