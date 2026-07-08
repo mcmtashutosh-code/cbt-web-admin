@@ -250,6 +250,16 @@
         <div class="mt">Live exam monitoring</div>
         <div class="ms">Active sessions, force release, exam window control</div>
       </div>
+      <div class="menu-card" id="menu-settings">
+        <div class="mi">🔑</div>
+        <div class="mt">Admin credentials</div>
+        <div class="ms">Change your admin ID and password</div>
+      </div>
+      <div class="menu-card" id="menu-findfix">
+        <div class="mi">🔍</div>
+        <div class="mt">Find & fix a question</div>
+        <div class="ms">Look up a practice/exam question by ID and correct it</div>
+      </div>
     </div>
     <div class="footer"><span class="lock">Secured by CBT Assessment Platform</span> · Cloud-hosted<br>© 2025 Ashutosh Dubey · All Rights Reserved</div>
   </div>
@@ -439,6 +449,101 @@
     <div id="live-sessions-list"><div class="spin"></div></div>
   </div>
 
+  <!-- ============ ADMIN CREDENTIALS ============ -->
+  <div class="view" id="view-settings">
+    <div class="section-title">Admin credentials</div>
+    <div class="section-sub">Change your Admin ID and/or password. You'll need to log in again with the new credentials after saving.</div>
+
+    <div class="upload-hint">Leave the Admin ID field as-is if you only want to change your password.</div>
+
+    <label class="field-label">Current Admin ID</label>
+    <input id="set-current-id" type="text" disabled>
+
+    <label class="field-label">New Admin ID</label>
+    <input id="set-new-id" type="text" placeholder="Enter new admin ID (or keep the same)">
+
+    <label class="field-label">New Password</label>
+    <div class="pw-row">
+      <input id="set-new-pass" type="password" placeholder="Enter new password">
+      <button type="button" class="pw-toggle" id="set-pw-toggle">SHOW</button>
+    </div>
+
+    <label class="field-label">Confirm New Password</label>
+    <input id="set-confirm-pass" type="password" placeholder="Re-enter new password">
+
+    <div class="error-text" id="set-cred-error"></div>
+    <button class="btn btn-primary" id="btn-update-creds" style="margin:10px 0 22px;">🔑 Update credentials</button>
+  </div>
+
+  <!-- ============ FIND & FIX QUESTION ============ -->
+  <div class="view" id="view-findfix">
+    <div class="section-title">Find & fix a question</div>
+    <div class="section-sub">Look up a question by its ID (shown to students during Practice) and correct it directly.</div>
+
+    <label class="field-label">Question bank</label>
+    <div class="filter-row" id="ff-bank-row">
+      <div class="filter-chip sel" data-bank="practice">Practice</div>
+      <div class="filter-chip" data-bank="exam">Exam (Live)</div>
+    </div>
+
+    <label class="field-label">Question ID</label>
+    <div class="row2">
+      <input id="ff-id-input" type="number" placeholder="e.g. 145" style="flex:2;">
+      <button class="btn btn-primary" id="btn-ff-fetch" style="flex:1;">🔍 Find</button>
+    </div>
+
+    <div class="error-text" id="ff-error"></div>
+
+    <div id="ff-form-wrap" style="display:none;">
+      <div class="upload-hint" id="ff-found-tag" style="margin-top:14px;"></div>
+
+      <label class="field-label">Question</label>
+      <textarea id="ff-question" style="min-height:70px;"></textarea>
+
+      <label class="field-label">Option A</label>
+      <input id="ff-opt-a" type="text">
+      <label class="field-label">Option B</label>
+      <input id="ff-opt-b" type="text">
+      <label class="field-label">Option C</label>
+      <input id="ff-opt-c" type="text">
+      <label class="field-label">Option D</label>
+      <input id="ff-opt-d" type="text">
+
+      <label class="field-label">Correct answer</label>
+      <div class="filter-row" id="ff-correct-row">
+        <div class="filter-chip" data-c="0">A</div>
+        <div class="filter-chip" data-c="1">B</div>
+        <div class="filter-chip" data-c="2">C</div>
+        <div class="filter-chip" data-c="3">D</div>
+      </div>
+
+      <div class="row2">
+        <div>
+          <label class="field-label">Subject</label>
+          <input id="ff-subject" type="text">
+        </div>
+        <div>
+          <label class="field-label">Topic</label>
+          <input id="ff-topic" type="text">
+        </div>
+      </div>
+
+      <div id="ff-section-wrap" style="display:none;">
+        <label class="field-label">Section (exam only)</label>
+        <input id="ff-section" type="text">
+      </div>
+
+      <label class="field-label">Difficulty</label>
+      <input id="ff-difficulty" type="text" placeholder="Easy / Moderate / Difficult">
+
+      <div class="error-text" id="ff-save-error"></div>
+      <div class="row2" style="margin:10px 0 22px;">
+        <button class="btn btn-primary" id="btn-ff-save">💾 Save changes</button>
+        <button class="btn btn-danger" id="btn-ff-delete">🗑 Delete question</button>
+      </div>
+    </div>
+  </div>
+
 </div>
 
 
@@ -496,11 +601,51 @@ function updateTopBack(id){
   }
 }
 
+let sessionPollIntervalId = null;
+let myDeviceLabel = null;
+
+function getDeviceLabel(){
+  const ua = navigator.userAgent;
+  let os = 'Unknown OS';
+  if (/Windows/.test(ua)) os = 'Windows';
+  else if (/Mac OS/.test(ua)) os = 'Mac';
+  else if (/Android/.test(ua)) os = 'Android';
+  else if (/iPhone|iPad/.test(ua)) os = 'iOS';
+  else if (/Linux/.test(ua)) os = 'Linux';
+  let browser = 'Browser';
+  if (/Edg/.test(ua)) browser = 'Edge';
+  else if (/Chrome/.test(ua)) browser = 'Chrome';
+  else if (/Firefox/.test(ua)) browser = 'Firefox';
+  else if (/Safari/.test(ua)) browser = 'Safari';
+  return `${browser} on ${os} (Web)`;
+}
+
 function doLogout(){
+  if (admin){
+    // Best-effort — don't block logout if this fails.
+    rpc('admin_release_session', { p_admin_id: admin.adminId, p_admin_pass: admin.adminPass }).catch(()=>{});
+  }
+  if (sessionPollIntervalId){ clearInterval(sessionPollIntervalId); sessionPollIntervalId = null; }
   admin = null;
   document.getElementById('in-admin-pass').value = '';
   document.getElementById('login-error').textContent = '';
   showView('view-login');
+}
+
+function startSessionWatch(){
+  if (sessionPollIntervalId) clearInterval(sessionPollIntervalId);
+  sessionPollIntervalId = setInterval(async () => {
+    if (!admin) return;
+    try{
+      const device = await rpc('admin_get_session_device', { p_admin_id: admin.adminId, p_admin_pass: admin.adminPass });
+      if (device && device !== myDeviceLabel){
+        clearInterval(sessionPollIntervalId); sessionPollIntervalId = null;
+        admin = null;
+        alert(`Your admin session was taken over from another device (${device}). You have been logged out here.`);
+        showView('view-login');
+      }
+    }catch(err){ /* ignore transient errors */ }
+  }, 20000);
 }
 
 async function rpc(fn, body){
@@ -533,13 +678,37 @@ async function doLogin(){
   const btn = document.getElementById('btn-login');
   btn.disabled = true; btn.textContent = 'Signing in...';
   try{
-    const ok = await rpc('verify_admin_login', { p_admin_id: adminId, p_admin_pass: adminPass });
-    if (!ok){
+    const check = await rpc('admin_login_check', { p_admin_id: adminId, p_admin_pass: adminPass });
+    if (!check.ok){
       errEl.textContent = 'Access denied: unauthorized credentials.';
       btn.disabled = false; btn.textContent = 'Sign in'; return;
     }
+
+    if (check.conflict){
+      const deviceName = check.device || 'another device';
+      const proceed = confirm(
+        `Concurrent Admin Session Detected\n\n` +
+        `Admin is already logged in from: ${deviceName}\n\n` +
+        `Simultaneous admin logins are not allowed.\n\n` +
+        `If that session was closed improperly (crash/closed tab), click OK to ` +
+        `force-release it and continue here. Otherwise click Cancel.`
+      );
+      if (!proceed){
+        btn.disabled = false; btn.textContent = 'Sign in';
+        return;
+      }
+    }
+
+    myDeviceLabel = getDeviceLabel();
+    const claimed = await rpc('admin_claim_session', { p_admin_id: adminId, p_admin_pass: adminPass, p_device_name: myDeviceLabel });
+    if (!claimed){
+      errEl.textContent = 'Unable to start session. Please try again.';
+      btn.disabled = false; btn.textContent = 'Sign in'; return;
+    }
+
     admin = { adminId, adminPass };
     btn.disabled = false; btn.textContent = 'Sign in';
+    startSessionWatch();
     showView('view-menu');
   }catch(err){
     errEl.textContent = 'Connection error. Please check your internet and try again.';
@@ -552,6 +721,8 @@ document.getElementById('menu-challenge').addEventListener('click', openChalleng
 document.getElementById('menu-results').addEventListener('click', openResultsSection);
 document.getElementById('menu-upload').addEventListener('click', openUploadSection);
 document.getElementById('menu-live').addEventListener('click', openLiveSection);
+document.getElementById('menu-settings').addEventListener('click', openSettingsSection);
+document.getElementById('menu-findfix').addEventListener('click', openFindFixSection);
 
 /* ---------------- FEEDBACK MANAGEMENT ---------------- */
 document.getElementById('filter-row').addEventListener('click', (e) => {
@@ -1386,6 +1557,185 @@ document.getElementById('btn-reset-sessions').addEventListener('click', async ()
     const ok = await rpc('admin_reset_all_live_sessions', { p_admin_id: admin.adminId, p_admin_pass: admin.adminPass });
     if (ok){ toast('All live sessions cleared.', 'ok'); loadLiveSessions(); }
     else toast('Unable to reset sessions.', 'err');
+  }catch(err){ toast('Connection error.', 'err'); }
+});
+
+/* ---------------- ADMIN CREDENTIALS ---------------- */
+function openSettingsSection(){
+  showView('view-settings');
+  document.getElementById('set-current-id').value = admin.adminId;
+  document.getElementById('set-new-id').value = admin.adminId;
+  document.getElementById('set-new-pass').value = '';
+  document.getElementById('set-confirm-pass').value = '';
+  document.getElementById('set-cred-error').textContent = '';
+}
+
+document.getElementById('set-pw-toggle').addEventListener('click', (e) => {
+  const inp = document.getElementById('set-new-pass');
+  const showing = inp.type === 'text';
+  inp.type = showing ? 'password' : 'text';
+  e.target.textContent = showing ? 'SHOW' : 'HIDE';
+});
+
+document.getElementById('btn-update-creds').addEventListener('click', async () => {
+  const newId = document.getElementById('set-new-id').value.trim();
+  const newPass = document.getElementById('set-new-pass').value;
+  const confirmPass = document.getElementById('set-confirm-pass').value;
+  const errEl = document.getElementById('set-cred-error');
+  errEl.textContent = '';
+
+  if (!newId){ errEl.textContent = 'Admin ID cannot be blank.'; return; }
+  if (!newPass || newPass.length < 3){ errEl.textContent = 'Please enter a password (at least 3 characters).'; return; }
+  if (newPass !== confirmPass){ errEl.textContent = 'Passwords do not match.'; return; }
+
+  const btn = document.getElementById('btn-update-creds');
+  btn.disabled = true; btn.textContent = 'Updating...';
+  try{
+    const ok = await rpc('admin_update_credentials', {
+      p_admin_id: admin.adminId, p_admin_pass: admin.adminPass,
+      p_new_admin_id: newId, p_new_admin_pass: newPass
+    });
+    if (ok){
+      toast('Credentials updated. Please log in again.', 'ok');
+      setTimeout(doLogout, 1200);
+    } else {
+      errEl.textContent = 'Unable to update credentials. Please try again.';
+    }
+  }catch(err){
+    errEl.textContent = 'Connection error. Please try again.';
+  }finally{
+    btn.disabled = false; btn.textContent = '🔑 Update credentials';
+  }
+});
+
+/* ---------------- FIND & FIX QUESTION ---------------- */
+let ffBank = 'practice';
+let ffCorrectIndex = 0;
+let ffCurrentId = null;
+
+function openFindFixSection(){
+  showView('view-findfix');
+  document.getElementById('ff-id-input').value = '';
+  document.getElementById('ff-error').textContent = '';
+  document.getElementById('ff-form-wrap').style.display = 'none';
+}
+
+document.getElementById('ff-bank-row').addEventListener('click', (e) => {
+  const chip = e.target.closest('.filter-chip');
+  if (!chip) return;
+  document.querySelectorAll('#ff-bank-row .filter-chip').forEach(c => c.classList.remove('sel'));
+  chip.classList.add('sel');
+  ffBank = chip.dataset.bank;
+  document.getElementById('ff-section-wrap').style.display = (ffBank === 'exam') ? 'block' : 'none';
+  document.getElementById('ff-form-wrap').style.display = 'none';
+});
+
+document.getElementById('ff-correct-row').addEventListener('click', (e) => {
+  const chip = e.target.closest('.filter-chip');
+  if (!chip) return;
+  document.querySelectorAll('#ff-correct-row .filter-chip').forEach(c => c.classList.remove('sel'));
+  chip.classList.add('sel');
+  ffCorrectIndex = parseInt(chip.dataset.c, 10);
+});
+
+document.getElementById('btn-ff-fetch').addEventListener('click', async () => {
+  const idVal = document.getElementById('ff-id-input').value.trim();
+  const errEl = document.getElementById('ff-error');
+  errEl.textContent = '';
+  document.getElementById('ff-form-wrap').style.display = 'none';
+
+  if (!idVal){ errEl.textContent = 'Please enter a question ID.'; return; }
+  const id = parseInt(idVal, 10);
+
+  const btn = document.getElementById('btn-ff-fetch');
+  btn.disabled = true; btn.textContent = 'Searching...';
+  try{
+    const fn = ffBank === 'practice' ? 'admin_get_practice_question' : 'admin_get_exam_question';
+    const rows = await rpc(fn, { p_admin_id: admin.adminId, p_admin_pass: admin.adminPass, p_id: id });
+    if (!rows || !rows.length){
+      errEl.textContent = `No ${ffBank} question found with ID ${id}.`;
+      return;
+    }
+    const q = rows[0];
+    ffCurrentId = q.id;
+    document.getElementById('ff-found-tag').textContent = `Found ${ffBank} question #${q.id}`;
+    document.getElementById('ff-question').value = q.question || '';
+    document.getElementById('ff-opt-a').value = q.option1 || '';
+    document.getElementById('ff-opt-b').value = q.option2 || '';
+    document.getElementById('ff-opt-c').value = q.option3 || '';
+    document.getElementById('ff-opt-d').value = q.option4 || '';
+    document.getElementById('ff-subject').value = q.subject || '';
+    document.getElementById('ff-topic').value = q.topic || '';
+    document.getElementById('ff-difficulty').value = q.difficulty || '';
+    if (ffBank === 'exam') document.getElementById('ff-section').value = q.section || '';
+
+    ffCorrectIndex = parseInt(q.correct_index, 10) || 0;
+    document.querySelectorAll('#ff-correct-row .filter-chip').forEach(c => {
+      c.classList.toggle('sel', parseInt(c.dataset.c, 10) === ffCorrectIndex);
+    });
+
+    document.getElementById('ff-save-error').textContent = '';
+    document.getElementById('ff-form-wrap').style.display = 'block';
+  }catch(err){
+    errEl.textContent = 'Unable to fetch this question. Please try again.';
+  }finally{
+    btn.disabled = false; btn.textContent = '🔍 Find';
+  }
+});
+
+document.getElementById('btn-ff-save').addEventListener('click', async () => {
+  const errEl = document.getElementById('ff-save-error');
+  errEl.textContent = '';
+  const question = document.getElementById('ff-question').value.trim();
+  const a = document.getElementById('ff-opt-a').value.trim();
+  const b = document.getElementById('ff-opt-b').value.trim();
+  const c = document.getElementById('ff-opt-c').value.trim();
+  const d = document.getElementById('ff-opt-d').value.trim();
+  const subject = document.getElementById('ff-subject').value.trim();
+  const topic = document.getElementById('ff-topic').value.trim();
+  const difficulty = document.getElementById('ff-difficulty').value.trim();
+
+  if (!question || !a || !b || !c || !d){ errEl.textContent = 'Question and all four options are required.'; return; }
+
+  const btn = document.getElementById('btn-ff-save');
+  btn.disabled = true; btn.textContent = 'Saving...';
+  try{
+    let ok;
+    if (ffBank === 'practice'){
+      ok = await rpc('admin_update_practice_question', {
+        p_admin_id: admin.adminId, p_admin_pass: admin.adminPass, p_id: ffCurrentId,
+        p_question: question, p_option1: a, p_option2: b, p_option3: c, p_option4: d,
+        p_correct_index: ffCorrectIndex, p_subject: subject, p_topic: topic, p_difficulty: difficulty
+      });
+    } else {
+      const section = document.getElementById('ff-section').value.trim();
+      ok = await rpc('admin_update_exam_question', {
+        p_admin_id: admin.adminId, p_admin_pass: admin.adminPass, p_id: ffCurrentId,
+        p_question: question, p_option1: a, p_option2: b, p_option3: c, p_option4: d,
+        p_correct_index: ffCorrectIndex, p_section: section, p_subject: subject, p_topic: topic, p_difficulty: difficulty
+      });
+    }
+    if (ok) toast('Question updated successfully.', 'ok');
+    else errEl.textContent = 'Unable to save changes.';
+  }catch(err){
+    errEl.textContent = 'Connection error. Please try again.';
+  }finally{
+    btn.disabled = false; btn.textContent = '💾 Save changes';
+  }
+});
+
+document.getElementById('btn-ff-delete').addEventListener('click', async () => {
+  if (!confirm(`Permanently delete ${ffBank} question #${ffCurrentId}? This cannot be undone.`)) return;
+  try{
+    const fn = ffBank === 'practice' ? 'admin_delete_practice_question' : 'admin_delete_exam_question';
+    const ok = await rpc(fn, { p_admin_id: admin.adminId, p_admin_pass: admin.adminPass, p_id: ffCurrentId });
+    if (ok){
+      toast('Question deleted.', 'ok');
+      document.getElementById('ff-form-wrap').style.display = 'none';
+      document.getElementById('ff-id-input').value = '';
+    } else {
+      toast('Unable to delete question.', 'err');
+    }
   }catch(err){ toast('Connection error.', 'err'); }
 });
 </script>
