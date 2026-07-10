@@ -162,6 +162,10 @@
 
   .upload-hint{background:var(--field); border:1px solid var(--line-soft); border-radius:var(--radius-sm); padding:11px 12px; font-size:12px; color:var(--text-dim); line-height:1.6; margin-bottom:6px;}
   .upload-hint code{background:var(--field-2); color:var(--accent-text); padding:1px 5px; border-radius:4px; font-size:11px;}
+  .es-sec-row{display:flex; align-items:center; justify-content:space-between; gap:10px; padding:8px 0; border-bottom:1px solid var(--line-soft);}
+  .es-sec-row:last-child{border-bottom:none;}
+  .es-sec-row label{font-size:12.5px; color:var(--text-dim); flex:1;}
+  .es-sec-row input{width:80px; padding:8px 10px; font-size:13px;}
 
   .exam-window-card{display:flex; align-items:center; justify-content:space-between; background:var(--card); border:1px solid var(--line-soft); border-radius:var(--radius); padding:14px 16px; margin-bottom:14px;}
   .ew-label{font-size:11px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:var(--text-mute);}
@@ -259,6 +263,11 @@
         <div class="mi">🔍</div>
         <div class="mt">Find & fix a question</div>
         <div class="ms">Look up a practice/exam question by ID and correct it</div>
+      </div>
+      <div class="menu-card" id="menu-examsettings">
+        <div class="mi">⚙️</div>
+        <div class="mt">Exam settings</div>
+        <div class="ms">Duration, marks, passing criteria, section-wise question count</div>
       </div>
     </div>
     <div class="footer"><span class="lock">Secured by CBT Assessment Platform</span> · Cloud-hosted<br>© 2025 Ashutosh Dubey · All Rights Reserved</div>
@@ -544,6 +553,50 @@
     </div>
   </div>
 
+  <!-- ============ EXAM SETTINGS ============ -->
+  <div class="view" id="view-examsettings">
+    <div class="section-title">Exam settings</div>
+    <div class="section-sub">Configure the Live Exam — duration, marking scheme, passing criteria, and how many questions come from each section.</div>
+
+    <div class="upload-hint" id="es-bank-info">Loading question bank info...</div>
+
+    <label class="field-label">3 · Marks configuration</label>
+    <div class="row2">
+      <div>
+        <div class="upload-hint" style="margin-bottom:4px; padding:6px 10px;">Correct (+)</div>
+        <input id="es-marks-correct" type="number" step="0.5" placeholder="e.g. 2">
+      </div>
+      <div>
+        <div class="upload-hint" style="margin-bottom:4px; padding:6px 10px;">Negative (−)</div>
+        <input id="es-marks-wrong" type="number" step="0.05" placeholder="e.g. 0.25">
+      </div>
+    </div>
+
+    <label class="field-label">4 · Exam duration</label>
+    <input id="es-duration" type="number" placeholder="Minutes, e.g. 100">
+
+    <label class="field-label">5 · Passing threshold</label>
+    <div class="row2">
+      <select id="es-passing-type">
+        <option value="Percentage">Percentage</option>
+        <option value="Marks">Marks</option>
+      </select>
+      <input id="es-passing-value" type="number" step="0.5" placeholder="e.g. 50">
+    </div>
+
+    <label class="field-label">6 · Result visibility</label>
+    <select id="es-visibility">
+      <option value="IMMEDIATE (Show Everything)">IMMEDIATE (Show Everything)</option>
+      <option value="HIDDEN (Mask Detailed Score)">HIDDEN (Mask Detailed Score)</option>
+    </select>
+
+    <label class="field-label">⭐ Section-wise question count</label>
+    <div id="es-sections-wrap" class="upload-hint">Loading sections...</div>
+
+    <div class="error-text" id="es-error"></div>
+    <button class="btn btn-primary" id="btn-es-save" style="margin:14px 0 22px;">💾 Apply & sync to cloud</button>
+  </div>
+
 </div>
 
 
@@ -730,6 +783,7 @@ document.getElementById('menu-upload').addEventListener('click', openUploadSecti
 document.getElementById('menu-live').addEventListener('click', openLiveSection);
 document.getElementById('menu-settings').addEventListener('click', openSettingsSection);
 document.getElementById('menu-findfix').addEventListener('click', openFindFixSection);
+document.getElementById('menu-examsettings').addEventListener('click', openExamSettingsSection);
 
 /* ---------------- FEEDBACK MANAGEMENT ---------------- */
 document.getElementById('filter-row').addEventListener('click', (e) => {
@@ -1744,6 +1798,109 @@ document.getElementById('btn-ff-delete').addEventListener('click', async () => {
       toast('Unable to delete question.', 'err');
     }
   }catch(err){ toast('Connection error.', 'err'); }
+});
+
+/* ---------------- EXAM SETTINGS ---------------- */
+let esAvailableSections = {};
+
+async function openExamSettingsSection(){
+  showView('view-examsettings');
+  document.getElementById('es-error').textContent = '';
+  document.getElementById('es-bank-info').textContent = 'Loading question bank info...';
+  document.getElementById('es-sections-wrap').innerHTML = 'Loading sections...';
+  try{
+    const r = await rpc('admin_get_exam_settings', { p_admin_id: admin.adminId, p_admin_pass: admin.adminPass });
+    if (!r.ok){ document.getElementById('es-error').textContent = 'Unable to load exam settings.'; return; }
+
+    document.getElementById('es-bank-info').textContent = `📚 Total questions in exam bank: ${r.total_bank}`;
+    document.getElementById('es-marks-correct').value = r.marks_correct;
+    document.getElementById('es-marks-wrong').value = r.marks_wrong;
+    document.getElementById('es-duration').value = r.duration_minutes;
+    document.getElementById('es-passing-type').value = r.passing_type;
+    document.getElementById('es-passing-value').value = r.passing_value;
+    document.getElementById('es-visibility').value = r.result_visibility;
+
+    esAvailableSections = r.available_sections || {};
+    const currentAllocations = r.section_allocations || {};
+    renderSectionInputs(currentAllocations);
+  }catch(err){
+    document.getElementById('es-error').textContent = 'Connection error. Please try again.';
+  }
+}
+
+function renderSectionInputs(currentAllocations){
+  const wrap = document.getElementById('es-sections-wrap');
+  const sectionNames = Object.keys(esAvailableSections);
+  if (!sectionNames.length){
+    wrap.innerHTML = '<div style="padding:4px 0;">No sections detected. Upload exam questions first.</div>';
+    return;
+  }
+  wrap.innerHTML = sectionNames.map(sec => {
+    const max = esAvailableSections[sec];
+    const current = currentAllocations[sec] != null ? currentAllocations[sec] : max;
+    return `
+      <div class="es-sec-row">
+        <label>${esc(sec)} (Max ${max})</label>
+        <input type="number" min="0" max="${max}" value="${current}" data-section="${esc(sec)}" class="es-sec-input">
+      </div>`;
+  }).join('');
+}
+
+document.getElementById('btn-es-save').addEventListener('click', async () => {
+  const errEl = document.getElementById('es-error');
+  errEl.textContent = '';
+
+  const duration = parseFloat(document.getElementById('es-duration').value);
+  const marksCorrect = parseFloat(document.getElementById('es-marks-correct').value);
+  const marksWrong = Math.abs(parseFloat(document.getElementById('es-marks-wrong').value) || 0);
+  const passingType = document.getElementById('es-passing-type').value;
+  const passingValue = parseFloat(document.getElementById('es-passing-value').value);
+  const visibility = document.getElementById('es-visibility').value;
+
+  if (!duration || duration <= 0){ errEl.textContent = 'Please enter a valid exam duration.'; return; }
+  if (isNaN(marksCorrect)){ errEl.textContent = 'Please enter valid correct marks.'; return; }
+  if (isNaN(passingValue)){ errEl.textContent = 'Please enter a valid passing value.'; return; }
+
+  const sectionAllocations = {};
+  let totalQ = 0;
+  document.querySelectorAll('.es-sec-input').forEach(inp => {
+    const val = parseInt(inp.value, 10) || 0;
+    sectionAllocations[inp.dataset.section] = val;
+    totalQ += val;
+  });
+
+  const secLines = Object.entries(sectionAllocations).map(([s,c]) => `  • ${s}: ${c} Questions`).join('\n')
+    || '  • No sections configured';
+
+  const confirmMsg =
+    `Please verify before syncing to Cloud:\n\n` +
+    `⏱ Exam Duration   : ${duration} minutes\n` +
+    `🎯 Passing Criteria: ${passingValue} (${passingType})\n` +
+    `📝 Total Questions : ${totalQ}\n` +
+    `📚 Section-wise Breakup:\n${secLines}\n\n` +
+    `✔ Correct Marks : +${marksCorrect}\n` +
+    `✖ Wrong Marks   : −${marksWrong}\n\n` +
+    `📊 Result Visibility: ${visibility}\n\n` +
+    `Confirm to sync these settings to the cloud?`;
+
+  if (!confirm(confirmMsg)) return;
+
+  const btn = document.getElementById('btn-es-save');
+  btn.disabled = true; btn.textContent = 'Syncing...';
+  try{
+    const ok = await rpc('admin_save_exam_settings', {
+      p_admin_id: admin.adminId, p_admin_pass: admin.adminPass,
+      p_duration_minutes: duration, p_marks_correct: marksCorrect, p_marks_wrong: marksWrong,
+      p_passing_type: passingType, p_passing_value: passingValue,
+      p_result_visibility: visibility, p_section_allocations: sectionAllocations
+    });
+    if (ok) toast('Exam settings synced to cloud successfully.', 'ok');
+    else errEl.textContent = 'Unable to save settings.';
+  }catch(err){
+    errEl.textContent = 'Connection error. Please try again.';
+  }finally{
+    btn.disabled = false; btn.textContent = '💾 Apply & sync to cloud';
+  }
 });
 </script>
 </body>
