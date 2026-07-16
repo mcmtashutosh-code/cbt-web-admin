@@ -1500,7 +1500,8 @@ document.getElementById('btn-up-practice').addEventListener('click', async () =>
       payload.push({
         question: r.question, option1: r.option1, option2: r.option2, option3: r.option3, option4: r.option4,
         correct_index: parseInt(r.correct_index, 10) || 0,
-        subject: r.subject || 'General', topic: r.topic || 'General', difficulty: r.difficulty || 'Easy'
+        subject: r.subject || 'General', topic: r.topic || 'General', difficulty: r.difficulty || 'Easy',
+        solution: r.solution || ''
       });
     }
     if (!payload.length){ statusEl.textContent = 'No valid rows found in the CSV file.'; return; }
