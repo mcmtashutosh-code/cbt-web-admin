@@ -59,6 +59,7 @@
   .btn-primary{background:var(--accent); color:#04182b;}
   .btn-ghost{background:var(--field-2); color:var(--text-dim);}
   .btn-danger{background:var(--danger); color:#fff;}
+  .btn-di{background:#7c4dff; color:#fff;}
   .btn-success{background:var(--success); color:#04231d;}
   .btn:disabled{opacity:.5; cursor:default;}
   .btn-sm{padding:10px 14px; font-size:12.5px; width:auto;}
@@ -263,6 +264,11 @@
         <div class="mi">🔍</div>
         <div class="mt">Find & fix a question</div>
         <div class="ms">Look up a practice/exam question by ID and correct it</div>
+      </div>
+      <div class="menu-card" id="menu-addq">
+        <div class="mi">➕</div>
+        <div class="mt">Add question</div>
+        <div class="ms">Add one question directly — with image support for figures/diagrams</div>
       </div>
       <div class="menu-card" id="menu-messages">
         <div class="mi">📨</div>
@@ -567,6 +573,13 @@
       <label class="field-label">Question</label>
       <textarea id="ff-question" style="min-height:70px;"></textarea>
 
+      <label class="field-label">Question image (optional — diagrams, non-verbal reasoning figures)</label>
+      <input id="ff-qimg-file" type="file" accept="image/*">
+      <div id="ff-qimg-preview-wrap" style="display:none; margin-top:8px;">
+        <img id="ff-qimg-preview" style="max-width:220px; max-height:160px; border-radius:8px; display:block;">
+        <button type="button" class="btn" id="btn-ff-qimg-remove" style="margin-top:6px;">✕ Remove image</button>
+      </div>
+
       <label class="field-label">Option A</label>
       <input id="ff-opt-a" type="text">
       <label class="field-label">Option B</label>
@@ -575,6 +588,64 @@
       <input id="ff-opt-c" type="text">
       <label class="field-label">Option D</label>
       <input id="ff-opt-d" type="text">
+
+      <div style="margin:10px 0;">
+        <button type="button" class="btn" id="btn-ff-toggle-optimg">🖼 Add / edit option images (optional)</button>
+      </div>
+      <div id="ff-optimg-wrap" style="display:none;">
+        <div class="row2">
+          <div>
+            <label class="field-label">Option A image</label>
+            <input id="ff-optimg-a-file" type="file" accept="image/*">
+            <div id="ff-optimg-a-preview-wrap" style="display:none; margin-top:6px;">
+              <img id="ff-optimg-a-preview" style="max-width:110px; max-height:90px; border-radius:6px; display:block;">
+              <button type="button" class="btn" id="btn-ff-optimg-a-remove" style="margin-top:4px;">✕ Remove</button>
+            </div>
+          </div>
+          <div>
+            <label class="field-label">Option B image</label>
+            <input id="ff-optimg-b-file" type="file" accept="image/*">
+            <div id="ff-optimg-b-preview-wrap" style="display:none; margin-top:6px;">
+              <img id="ff-optimg-b-preview" style="max-width:110px; max-height:90px; border-radius:6px; display:block;">
+              <button type="button" class="btn" id="btn-ff-optimg-b-remove" style="margin-top:4px;">✕ Remove</button>
+            </div>
+          </div>
+        </div>
+        <div class="row2">
+          <div>
+            <label class="field-label">Option C image</label>
+            <input id="ff-optimg-c-file" type="file" accept="image/*">
+            <div id="ff-optimg-c-preview-wrap" style="display:none; margin-top:6px;">
+              <img id="ff-optimg-c-preview" style="max-width:110px; max-height:90px; border-radius:6px; display:block;">
+              <button type="button" class="btn" id="btn-ff-optimg-c-remove" style="margin-top:4px;">✕ Remove</button>
+            </div>
+          </div>
+          <div>
+            <label class="field-label">Option D image</label>
+            <input id="ff-optimg-d-file" type="file" accept="image/*">
+            <div id="ff-optimg-d-preview-wrap" style="display:none; margin-top:6px;">
+              <img id="ff-optimg-d-preview" style="max-width:110px; max-height:90px; border-radius:6px; display:block;">
+              <button type="button" class="btn" id="btn-ff-optimg-d-remove" style="margin-top:4px;">✕ Remove</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div style="margin:16px 0 6px; padding-top:10px; border-top:1px dashed var(--line-soft);">
+        <div class="section-sub" style="margin:0 0 8px;">DI / passage (optional) — for a set of questions sharing one common chart, table, or paragraph. Give all questions in the same set the same DI Group name.</div>
+      </div>
+      <label class="field-label">DI Group name (leave blank if not part of a DI set)</label>
+      <input id="ff-di-group" type="text" placeholder="e.g. DI-Set-1">
+
+      <label class="field-label">DI passage text (optional)</label>
+      <textarea id="ff-di-content" style="min-height:60px;"></textarea>
+
+      <label class="field-label">DI chart / table image (optional)</label>
+      <input id="ff-di-image-file" type="file" accept="image/*">
+      <div id="ff-di-image-preview-wrap" style="display:none; margin-top:8px;">
+        <img id="ff-di-image-preview" style="max-width:220px; max-height:160px; border-radius:8px; display:block;">
+        <button type="button" class="btn" id="btn-ff-di-image-remove" style="margin-top:6px;">✕ Remove image</button>
+      </div>
 
       <label class="field-label">Correct answer</label>
       <div class="filter-row" id="ff-correct-row">
@@ -608,6 +679,125 @@
         <button class="btn btn-primary" id="btn-ff-save">💾 Save changes</button>
         <button class="btn btn-danger" id="btn-ff-delete">🗑 Delete question</button>
       </div>
+    </div>
+  </div>
+
+  <!-- ============ ADD QUESTION ============ -->
+  <div class="view" id="view-addq">
+    <div class="section-title">Add question</div>
+    <div class="section-sub">Add a single question directly. Use this for figures, diagrams, or layouts that can't be typed — upload an image for the question and/or any option.</div>
+
+    <label class="field-label">Question bank</label>
+    <div class="filter-row" id="aq-bank-row">
+      <div class="filter-chip sel" data-bank="practice">Practice</div>
+      <div class="filter-chip" data-bank="exam">Exam (Live)</div>
+    </div>
+
+    <label class="field-label">Question text (leave blank if image-only)</label>
+    <textarea id="aq-question" style="min-height:70px;"></textarea>
+
+    <label class="field-label">Question image (optional — a figure that belongs to THIS question only, e.g. non-verbal reasoning)</label>
+    <input id="aq-qimg-file" type="file" accept="image/*">
+    <div class="row2" style="margin-top:6px;">
+      <button type="button" class="btn btn-primary" id="btn-aq-reuse-qimg" style="flex:1;">🔁 Reuse last QUESTION image</button>
+    </div>
+    <div class="upload-hint" style="margin-top:4px;">Use this only if this question needs the exact same figure as the question you just added — not for shared DI charts (use the purple button lower down for that).</div>
+    <div id="aq-qimg-preview-wrap" style="display:none; margin-top:8px;">
+      <img id="aq-qimg-preview" style="max-width:220px; max-height:160px; border-radius:8px; display:block;">
+      <button type="button" class="btn" id="btn-aq-qimg-remove" style="margin-top:6px;">✕ Remove image</button>
+    </div>
+
+    <div class="row2">
+      <div>
+        <label class="field-label">Option A (text, or leave blank for image-only)</label>
+        <input id="aq-opt-a" type="text">
+        <input id="aq-optimg-a-file" type="file" accept="image/*" style="margin-top:6px;">
+        <div id="aq-optimg-a-preview-wrap" style="display:none; margin-top:6px;">
+          <img id="aq-optimg-a-preview" style="max-width:110px; max-height:90px; border-radius:6px; display:block;">
+          <button type="button" class="btn" id="btn-aq-optimg-a-remove" style="margin-top:4px;">✕ Remove</button>
+        </div>
+      </div>
+      <div>
+        <label class="field-label">Option B (text, or leave blank for image-only)</label>
+        <input id="aq-opt-b" type="text">
+        <input id="aq-optimg-b-file" type="file" accept="image/*" style="margin-top:6px;">
+        <div id="aq-optimg-b-preview-wrap" style="display:none; margin-top:6px;">
+          <img id="aq-optimg-b-preview" style="max-width:110px; max-height:90px; border-radius:6px; display:block;">
+          <button type="button" class="btn" id="btn-aq-optimg-b-remove" style="margin-top:4px;">✕ Remove</button>
+        </div>
+      </div>
+    </div>
+    <div class="row2">
+      <div>
+        <label class="field-label">Option C (text, or leave blank for image-only)</label>
+        <input id="aq-opt-c" type="text">
+        <input id="aq-optimg-c-file" type="file" accept="image/*" style="margin-top:6px;">
+        <div id="aq-optimg-c-preview-wrap" style="display:none; margin-top:6px;">
+          <img id="aq-optimg-c-preview" style="max-width:110px; max-height:90px; border-radius:6px; display:block;">
+          <button type="button" class="btn" id="btn-aq-optimg-c-remove" style="margin-top:4px;">✕ Remove</button>
+        </div>
+      </div>
+      <div>
+        <label class="field-label">Option D (text, or leave blank for image-only)</label>
+        <input id="aq-opt-d" type="text">
+        <input id="aq-optimg-d-file" type="file" accept="image/*" style="margin-top:6px;">
+        <div id="aq-optimg-d-preview-wrap" style="display:none; margin-top:6px;">
+          <img id="aq-optimg-d-preview" style="max-width:110px; max-height:90px; border-radius:6px; display:block;">
+          <button type="button" class="btn" id="btn-aq-optimg-d-remove" style="margin-top:4px;">✕ Remove</button>
+        </div>
+      </div>
+    </div>
+
+    <div style="margin:16px 0 6px; padding-top:10px; border-top:1px dashed var(--line-soft);">
+      <div class="section-sub" style="margin:0 0 8px;">DI / passage (optional) — for a set of questions sharing one common chart, table, or paragraph. Give all questions in the same set the same DI Group name.</div>
+    </div>
+    <label class="field-label">DI Group name (e.g. "DI-Set-1" — leave blank if not part of a DI set)</label>
+    <input id="aq-di-group" type="text" placeholder="e.g. DI-Set-1">
+
+    <label class="field-label">DI passage text (optional)</label>
+    <textarea id="aq-di-content" style="min-height:60px;"></textarea>
+
+    <label class="field-label">DI chart / table image (optional — the SHARED chart/table used by ALL questions in this DI set)</label>
+    <input id="aq-di-image-file" type="file" accept="image/*">
+    <div class="row2" style="margin-top:6px;">
+      <button type="button" class="btn btn-di" id="btn-aq-reuse-diimg" style="flex:1;">🔁 Reuse last DI image (for this DI set)</button>
+    </div>
+    <div class="upload-hint" style="margin-top:4px;">Use this for Q2, Q3, Q4... of the same DI set, so you don't have to re-upload the same chart every time.</div>
+    <div id="aq-di-image-preview-wrap" style="display:none; margin-top:8px;">
+      <img id="aq-di-image-preview" style="max-width:220px; max-height:160px; border-radius:8px; display:block;">
+      <button type="button" class="btn" id="btn-aq-di-image-remove" style="margin-top:6px;">✕ Remove image</button>
+    </div>
+
+    <label class="field-label">Correct answer</label>
+    <div class="filter-row" id="aq-correct-row">
+      <div class="filter-chip sel" data-c="0">A</div>
+      <div class="filter-chip" data-c="1">B</div>
+      <div class="filter-chip" data-c="2">C</div>
+      <div class="filter-chip" data-c="3">D</div>
+    </div>
+
+    <div class="row2">
+      <div>
+        <label class="field-label">Subject</label>
+        <input id="aq-subject" type="text" placeholder="e.g. Reasoning">
+      </div>
+      <div>
+        <label class="field-label">Topic</label>
+        <input id="aq-topic" type="text" placeholder="e.g. Non-verbal">
+      </div>
+    </div>
+
+    <div id="aq-section-wrap" style="display:none;">
+      <label class="field-label">Section (exam only)</label>
+      <input id="aq-section" type="text">
+    </div>
+
+    <label class="field-label">Difficulty</label>
+    <input id="aq-difficulty" type="text" placeholder="Easy / Moderate / Difficult">
+
+    <div class="error-text" id="aq-error"></div>
+    <div class="row2" style="margin:10px 0 22px;">
+      <button class="btn btn-primary" id="btn-aq-save">✅ Add question</button>
     </div>
   </div>
 
@@ -841,6 +1031,7 @@ document.getElementById('menu-upload').addEventListener('click', openUploadSecti
 document.getElementById('menu-live').addEventListener('click', openLiveSection);
 document.getElementById('menu-settings').addEventListener('click', openSettingsSection);
 document.getElementById('menu-findfix').addEventListener('click', openFindFixSection);
+document.getElementById('menu-addq').addEventListener('click', openAddQuestionSection);
 document.getElementById('menu-examsettings').addEventListener('click', openExamSettingsSection);
 document.getElementById('menu-messages').addEventListener('click', openMessagesSection);
 
@@ -2037,7 +2228,93 @@ function openFindFixSection(){
   document.getElementById('ff-id-input').value = '';
   document.getElementById('ff-error').textContent = '';
   document.getElementById('ff-form-wrap').style.display = 'none';
+  resetFFImageFields();
 }
+
+/* question & option images for Find & Fix */
+let ffQImgFile = null;
+let ffQImgExistingUrl = null;
+const ffOptImgFiles = { a: null, b: null, c: null, d: null };
+const ffOptImgExistingUrls = { a: null, b: null, c: null, d: null };
+let ffDiImageFile = null;
+let ffDiImageExistingUrl = null;
+
+function setupFFImageInput(fileInputId, previewWrapId, previewImgId, removeBtnId, onSet, onRemove, maxMB){
+  const fileInput = document.getElementById(fileInputId);
+  const previewWrap = document.getElementById(previewWrapId);
+  const previewImg = document.getElementById(previewImgId);
+  fileInput.addEventListener('change', () => {
+    const file = fileInput.files[0];
+    if (!file) return;
+    if (file.size > maxMB * 1024 * 1024){
+      toast(`Image must be under ${maxMB}MB.`, 'err');
+      fileInput.value = '';
+      return;
+    }
+    onSet(file);
+    const reader = new FileReader();
+    reader.onload = () => { previewImg.src = reader.result; previewWrap.style.display = 'block'; };
+    reader.readAsDataURL(file);
+  });
+  document.getElementById(removeBtnId).addEventListener('click', () => {
+    onRemove();
+    fileInput.value = '';
+    previewWrap.style.display = 'none';
+    previewImg.src = '';
+  });
+}
+
+setupFFImageInput('ff-qimg-file', 'ff-qimg-preview-wrap', 'ff-qimg-preview', 'btn-ff-qimg-remove',
+  (file) => { ffQImgFile = file; ffQImgExistingUrl = null; },
+  () => { ffQImgFile = null; ffQImgExistingUrl = null; }, 5);
+
+['a','b','c','d'].forEach(k => {
+  setupFFImageInput(`ff-optimg-${k}-file`, `ff-optimg-${k}-preview-wrap`, `ff-optimg-${k}-preview`, `btn-ff-optimg-${k}-remove`,
+    (file) => { ffOptImgFiles[k] = file; ffOptImgExistingUrls[k] = null; },
+    () => { ffOptImgFiles[k] = null; ffOptImgExistingUrls[k] = null; }, 3);
+});
+
+document.getElementById('btn-ff-toggle-optimg').addEventListener('click', () => {
+  const wrap = document.getElementById('ff-optimg-wrap');
+  wrap.style.display = (wrap.style.display === 'none') ? 'block' : 'none';
+});
+
+async function uploadFFImage(file, prefix){
+  const ext = (file.name.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '') || 'jpg';
+  const path = `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}.${ext}`;
+  const res = await fetch(`${SUPABASE_URL}/storage/v1/object/question-images/${path}`, {
+    method: 'POST',
+    headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}`, 'Content-Type': file.type || 'image/jpeg' },
+    body: file
+  });
+  if (!res.ok){
+    let detail = `Image upload failed (HTTP ${res.status})`;
+    try{ const j = await res.json(); detail = j.message || detail; }catch(e){ /* not json */ }
+    throw new Error(detail);
+  }
+  return `${SUPABASE_URL}/storage/v1/object/public/question-images/${path}`;
+}
+
+function resetFFImageFields(){
+  ffQImgFile = null; ffQImgExistingUrl = null;
+  document.getElementById('ff-qimg-file').value = '';
+  document.getElementById('ff-qimg-preview-wrap').style.display = 'none';
+  ['a','b','c','d'].forEach(k => {
+    ffOptImgFiles[k] = null; ffOptImgExistingUrls[k] = null;
+    document.getElementById(`ff-optimg-${k}-file`).value = '';
+    document.getElementById(`ff-optimg-${k}-preview-wrap`).style.display = 'none';
+  });
+  document.getElementById('ff-optimg-wrap').style.display = 'none';
+  ffDiImageFile = null; ffDiImageExistingUrl = null;
+  document.getElementById('ff-di-image-file').value = '';
+  document.getElementById('ff-di-image-preview-wrap').style.display = 'none';
+  document.getElementById('ff-di-group').value = '';
+  document.getElementById('ff-di-content').value = '';
+}
+
+setupFFImageInput('ff-di-image-file', 'ff-di-image-preview-wrap', 'ff-di-image-preview', 'btn-ff-di-image-remove',
+  (file) => { ffDiImageFile = file; ffDiImageExistingUrl = null; },
+  () => { ffDiImageFile = null; ffDiImageExistingUrl = null; }, 5);
 
 document.getElementById('ff-bank-row').addEventListener('click', (e) => {
   const chip = e.target.closest('.filter-chip');
@@ -2088,6 +2365,32 @@ document.getElementById('btn-ff-fetch').addEventListener('click', async () => {
     document.getElementById('ff-difficulty').value = q.difficulty || '';
     if (ffBank === 'exam') document.getElementById('ff-section').value = q.section || '';
 
+    resetFFImageFields();
+    ffQImgExistingUrl = q.question_image_url || null;
+    if (ffQImgExistingUrl){
+      document.getElementById('ff-qimg-preview').src = ffQImgExistingUrl;
+      document.getElementById('ff-qimg-preview-wrap').style.display = 'block';
+    }
+    let anyOptImg = false;
+    ['a','b','c','d'].forEach(k => {
+      const url = q[`option_${k}_image_url`] || null;
+      ffOptImgExistingUrls[k] = url;
+      if (url){
+        anyOptImg = true;
+        document.getElementById(`ff-optimg-${k}-preview`).src = url;
+        document.getElementById(`ff-optimg-${k}-preview-wrap`).style.display = 'block';
+      }
+    });
+    document.getElementById('ff-optimg-wrap').style.display = anyOptImg ? 'block' : 'none';
+
+    document.getElementById('ff-di-group').value = q.di_group || '';
+    document.getElementById('ff-di-content').value = q.di_content || '';
+    ffDiImageExistingUrl = q.di_image || null;
+    if (ffDiImageExistingUrl){
+      document.getElementById('ff-di-image-preview').src = ffDiImageExistingUrl;
+      document.getElementById('ff-di-image-preview-wrap').style.display = 'block';
+    }
+
     ffCorrectIndex = parseInt(q.correct_index, 10) || 0;
     document.querySelectorAll('#ff-correct-row .filter-chip').forEach(c => {
       c.classList.toggle('sel', parseInt(c.dataset.c, 10) === ffCorrectIndex);
@@ -2119,25 +2422,63 @@ document.getElementById('btn-ff-save').addEventListener('click', async () => {
   const btn = document.getElementById('btn-ff-save');
   btn.disabled = true; btn.textContent = 'Saving...';
   try{
+    let qImgUrl = ffQImgExistingUrl;
+    if (ffQImgFile){
+      btn.textContent = 'Uploading images...';
+      qImgUrl = await uploadFFImage(ffQImgFile, 'ffq');
+    }
+    const optImgUrls = {};
+    for (const k of ['a','b','c','d']){
+      optImgUrls[k] = ffOptImgExistingUrls[k];
+      if (ffOptImgFiles[k]){
+        btn.textContent = 'Uploading images...';
+        optImgUrls[k] = await uploadFFImage(ffOptImgFiles[k], `ffopt${k}`);
+      }
+    }
+    btn.textContent = 'Saving...';
+
+    let diImgUrl = ffDiImageExistingUrl;
+    if (ffDiImageFile){
+      btn.textContent = 'Uploading images...';
+      diImgUrl = await uploadFFImage(ffDiImageFile, 'ffdi');
+      btn.textContent = 'Saving...';
+    }
+    const diGroup = document.getElementById('ff-di-group').value.trim();
+    const diContent = document.getElementById('ff-di-content').value.trim();
+
     let ok;
     if (ffBank === 'practice'){
       ok = await rpc('admin_update_practice_question', {
         p_admin_id: admin.adminId, p_admin_pass: admin.adminPass, p_id: ffCurrentId,
         p_question: question, p_option1: a, p_option2: b, p_option3: c, p_option4: d,
-        p_correct_index: ffCorrectIndex, p_subject: subject, p_topic: topic, p_difficulty: difficulty
+        p_correct_index: ffCorrectIndex, p_subject: subject, p_topic: topic, p_difficulty: difficulty,
+        p_question_image_url: qImgUrl,
+        p_option_a_image_url: optImgUrls.a, p_option_b_image_url: optImgUrls.b,
+        p_option_c_image_url: optImgUrls.c, p_option_d_image_url: optImgUrls.d,
+        p_di_content: diContent || null, p_di_group: diGroup || null, p_di_image: diImgUrl
       });
     } else {
       const section = document.getElementById('ff-section').value.trim();
       ok = await rpc('admin_update_exam_question', {
         p_admin_id: admin.adminId, p_admin_pass: admin.adminPass, p_id: ffCurrentId,
         p_question: question, p_option1: a, p_option2: b, p_option3: c, p_option4: d,
-        p_correct_index: ffCorrectIndex, p_section: section, p_subject: subject, p_topic: topic, p_difficulty: difficulty
+        p_correct_index: ffCorrectIndex, p_section: section, p_subject: subject, p_topic: topic, p_difficulty: difficulty,
+        p_question_image_url: qImgUrl,
+        p_option_a_image_url: optImgUrls.a, p_option_b_image_url: optImgUrls.b,
+        p_option_c_image_url: optImgUrls.c, p_option_d_image_url: optImgUrls.d,
+        p_di_content: diContent || null, p_di_group: diGroup || null, p_di_image: diImgUrl
       });
     }
-    if (ok) toast('Question updated successfully.', 'ok');
-    else errEl.textContent = 'Unable to save changes.';
+    if (ok){
+      toast('Question updated successfully.', 'ok');
+      ffQImgExistingUrl = qImgUrl; ffQImgFile = null;
+      ['a','b','c','d'].forEach(k => { ffOptImgExistingUrls[k] = optImgUrls[k]; ffOptImgFiles[k] = null; });
+      ffDiImageExistingUrl = diImgUrl; ffDiImageFile = null;
+    } else {
+      errEl.textContent = 'Unable to save changes.';
+    }
   }catch(err){
-    errEl.textContent = 'Connection error. Please try again.';
+    errEl.textContent = err && err.message ? err.message : 'Connection error. Please try again.';
   }finally{
     btn.disabled = false; btn.textContent = '💾 Save changes';
   }
@@ -2156,6 +2497,186 @@ document.getElementById('btn-ff-delete').addEventListener('click', async () => {
       toast('Unable to delete question.', 'err');
     }
   }catch(err){ toast('Connection error.', 'err'); }
+});
+
+/* ---------------- ADD QUESTION ---------------- */
+let aqBank = 'practice';
+let aqCorrectIndex = 0;
+let aqQImgFile = null;
+let aqReuseQImgUrl = null;   // set when admin clicks "reuse last image" (for DI sets)
+let aqLastQImgUrl = null;    // remembers the most recently uploaded question image across saves in this session
+let aqDiImageFile = null;
+let aqReuseDiImageUrl = null;
+let aqLastDiImageUrl = null; // remembers the most recently uploaded DI image across saves in this session
+const aqOptImgFiles = { a: null, b: null, c: null, d: null };
+
+function openAddQuestionSection(){
+  showView('view-addq');
+  document.getElementById('aq-error').textContent = '';
+  document.getElementById('aq-question').value = '';
+  ['a','b','c','d'].forEach(k => document.getElementById(`aq-opt-${k}`).value = '');
+  document.getElementById('aq-subject').value = '';
+  document.getElementById('aq-topic').value = '';
+  document.getElementById('aq-section').value = '';
+  document.getElementById('aq-difficulty').value = '';
+  aqBank = 'practice';
+  document.querySelectorAll('#aq-bank-row .filter-chip').forEach(c => c.classList.toggle('sel', c.dataset.bank === 'practice'));
+  document.getElementById('aq-section-wrap').style.display = 'none';
+  aqCorrectIndex = 0;
+  document.querySelectorAll('#aq-correct-row .filter-chip').forEach(c => c.classList.toggle('sel', c.dataset.c === '0'));
+  aqQImgFile = null;
+  aqReuseQImgUrl = null;
+  document.getElementById('aq-qimg-file').value = '';
+  document.getElementById('aq-qimg-preview-wrap').style.display = 'none';
+  ['a','b','c','d'].forEach(k => {
+    aqOptImgFiles[k] = null;
+    document.getElementById(`aq-optimg-${k}-file`).value = '';
+    document.getElementById(`aq-optimg-${k}-preview-wrap`).style.display = 'none';
+  });
+  document.getElementById('aq-di-group').value = '';
+  document.getElementById('aq-di-content').value = '';
+  aqDiImageFile = null;
+  aqReuseDiImageUrl = null;
+  document.getElementById('aq-di-image-file').value = '';
+  document.getElementById('aq-di-image-preview-wrap').style.display = 'none';
+}
+
+document.getElementById('aq-bank-row').addEventListener('click', (e) => {
+  const chip = e.target.closest('.filter-chip');
+  if (!chip) return;
+  document.querySelectorAll('#aq-bank-row .filter-chip').forEach(c => c.classList.remove('sel'));
+  chip.classList.add('sel');
+  aqBank = chip.dataset.bank;
+  document.getElementById('aq-section-wrap').style.display = (aqBank === 'exam') ? 'block' : 'none';
+});
+
+document.getElementById('aq-correct-row').addEventListener('click', (e) => {
+  const chip = e.target.closest('.filter-chip');
+  if (!chip) return;
+  document.querySelectorAll('#aq-correct-row .filter-chip').forEach(c => c.classList.remove('sel'));
+  chip.classList.add('sel');
+  aqCorrectIndex = parseInt(chip.dataset.c, 10);
+});
+
+setupFFImageInput('aq-qimg-file', 'aq-qimg-preview-wrap', 'aq-qimg-preview', 'btn-aq-qimg-remove',
+  (file) => { aqQImgFile = file; aqReuseQImgUrl = null; },
+  () => { aqQImgFile = null; aqReuseQImgUrl = null; }, 5);
+
+document.getElementById('btn-aq-reuse-qimg').addEventListener('click', () => {
+  if (!aqLastQImgUrl){ toast('No previous question image to reuse yet.', 'err'); return; }
+  aqQImgFile = null;
+  aqReuseQImgUrl = aqLastQImgUrl;
+  document.getElementById('aq-qimg-file').value = '';
+  document.getElementById('aq-qimg-preview').src = aqLastQImgUrl;
+  document.getElementById('aq-qimg-preview-wrap').style.display = 'block';
+  toast('Reusing last question image — no re-upload needed.', 'ok');
+});
+
+setupFFImageInput('aq-di-image-file', 'aq-di-image-preview-wrap', 'aq-di-image-preview', 'btn-aq-di-image-remove',
+  (file) => { aqDiImageFile = file; aqReuseDiImageUrl = null; },
+  () => { aqDiImageFile = null; aqReuseDiImageUrl = null; }, 5);
+
+document.getElementById('btn-aq-reuse-diimg').addEventListener('click', () => {
+  if (!aqLastDiImageUrl){ toast('No previous DI image to reuse yet.', 'err'); return; }
+  aqDiImageFile = null;
+  aqReuseDiImageUrl = aqLastDiImageUrl;
+  document.getElementById('aq-di-image-file').value = '';
+  document.getElementById('aq-di-image-preview').src = aqLastDiImageUrl;
+  document.getElementById('aq-di-image-preview-wrap').style.display = 'block';
+  toast('Reusing last DI image — no re-upload needed.', 'ok');
+});
+
+['a','b','c','d'].forEach(k => {
+  setupFFImageInput(`aq-optimg-${k}-file`, `aq-optimg-${k}-preview-wrap`, `aq-optimg-${k}-preview`, `btn-aq-optimg-${k}-remove`,
+    (file) => { aqOptImgFiles[k] = file; },
+    () => { aqOptImgFiles[k] = null; }, 3);
+});
+
+document.getElementById('btn-aq-save').addEventListener('click', async () => {
+  const errEl = document.getElementById('aq-error');
+  errEl.textContent = '';
+  const question = document.getElementById('aq-question').value.trim();
+  const a = document.getElementById('aq-opt-a').value.trim();
+  const b = document.getElementById('aq-opt-b').value.trim();
+  const c = document.getElementById('aq-opt-c').value.trim();
+  const d = document.getElementById('aq-opt-d').value.trim();
+  const subject = document.getElementById('aq-subject').value.trim() || 'General';
+  const topic = document.getElementById('aq-topic').value.trim() || 'General';
+  const difficulty = document.getElementById('aq-difficulty').value.trim() || 'Easy';
+
+  if (!question && !aqQImgFile && !aqReuseQImgUrl){ errEl.textContent = 'Enter question text or upload/reuse a question image.'; return; }
+  if ((!a && !aqOptImgFiles.a) || (!b && !aqOptImgFiles.b) || (!c && !aqOptImgFiles.c) || (!d && !aqOptImgFiles.d)){
+    errEl.textContent = 'Each option needs text or an image.'; return;
+  }
+  if (aqBank === 'exam' && !document.getElementById('aq-section').value.trim()){
+    errEl.textContent = 'Section is required for exam questions.'; return;
+  }
+
+  const btn = document.getElementById('btn-aq-save');
+  btn.disabled = true; btn.textContent = 'Saving...';
+  try{
+    let qImgUrl = aqReuseQImgUrl || null;
+    if (aqQImgFile){
+      btn.textContent = 'Uploading images...';
+      qImgUrl = await uploadFFImage(aqQImgFile, 'aqq');
+    }
+    if (qImgUrl) aqLastQImgUrl = qImgUrl;
+    const optImgUrls = {};
+    for (const k of ['a','b','c','d']){
+      optImgUrls[k] = null;
+      if (aqOptImgFiles[k]){
+        btn.textContent = 'Uploading images...';
+        optImgUrls[k] = await uploadFFImage(aqOptImgFiles[k], `aqopt${k}`);
+      }
+    }
+    btn.textContent = 'Saving...';
+
+    let diImgUrl = aqReuseDiImageUrl || null;
+    if (aqDiImageFile){
+      btn.textContent = 'Uploading images...';
+      diImgUrl = await uploadFFImage(aqDiImageFile, 'aqdi');
+    }
+    if (diImgUrl) aqLastDiImageUrl = diImgUrl;
+    const diGroup = document.getElementById('aq-di-group').value.trim();
+    const diContent = document.getElementById('aq-di-content').value.trim();
+    btn.textContent = 'Saving...';
+
+    let newId;
+    if (aqBank === 'practice'){
+      newId = await rpc('admin_add_practice_question', {
+        p_admin_id: admin.adminId, p_admin_pass: admin.adminPass,
+        p_question: question, p_option1: a, p_option2: b, p_option3: c, p_option4: d,
+        p_correct_index: aqCorrectIndex, p_subject: subject, p_topic: topic, p_difficulty: difficulty,
+        p_solution: '',
+        p_question_image_url: qImgUrl,
+        p_option_a_image_url: optImgUrls.a, p_option_b_image_url: optImgUrls.b,
+        p_option_c_image_url: optImgUrls.c, p_option_d_image_url: optImgUrls.d,
+        p_di_content: diContent || null, p_di_group: diGroup || null, p_di_image: diImgUrl
+      });
+    } else {
+      const section = document.getElementById('aq-section').value.trim();
+      newId = await rpc('admin_add_exam_question', {
+        p_admin_id: admin.adminId, p_admin_pass: admin.adminPass,
+        p_question: question, p_option1: a, p_option2: b, p_option3: c, p_option4: d,
+        p_correct_index: aqCorrectIndex, p_section: section, p_subject: subject, p_topic: topic, p_difficulty: difficulty,
+        p_question_image_url: qImgUrl,
+        p_option_a_image_url: optImgUrls.a, p_option_b_image_url: optImgUrls.b,
+        p_option_c_image_url: optImgUrls.c, p_option_d_image_url: optImgUrls.d,
+        p_di_content: diContent || null, p_di_group: diGroup || null, p_di_image: diImgUrl
+      });
+    }
+    if (newId){
+      toast(`Question added (ID ${newId}).`, 'ok');
+      openAddQuestionSection();
+      if (diGroup) document.getElementById('aq-di-group').value = diGroup;
+    } else {
+      errEl.textContent = 'Unable to add question. Please try again.';
+    }
+  }catch(err){
+    errEl.textContent = err && err.message ? err.message : 'Connection error. Please try again.';
+  }finally{
+    btn.disabled = false; btn.textContent = '✅ Add question';
+  }
 });
 
 /* ---------------- EXAM SETTINGS ---------------- */
