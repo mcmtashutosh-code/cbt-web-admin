@@ -841,6 +841,16 @@
     <label class="field-label">⭐ Section-wise question count</label>
     <div id="es-sections-wrap" class="upload-hint">Loading sections...</div>
 
+    <label class="field-label">7 · Email result to student (Coming soon)</label>
+    <div class="upload-hint" style="margin-bottom:8px;">
+      When enabled, students will see an option to email themselves their result + answer key right after submitting.
+      This requires an email service to be connected — until then students will see a "Coming soon" message.
+    </div>
+    <label style="display:flex; align-items:center; gap:8px; cursor:pointer; margin-bottom:14px;">
+      <input type="checkbox" id="es-email-enabled" style="width:18px; height:18px; cursor:pointer;">
+      <span>Enable "Email me my result" option for students</span>
+    </label>
+
     <div class="error-text" id="es-error"></div>
     <button class="btn btn-primary" id="btn-es-save" style="margin:14px 0 22px;">💾 Apply & sync to cloud</button>
   </div>
@@ -2698,6 +2708,7 @@ async function openExamSettingsSection(){
     document.getElementById('es-passing-type').value = r.passing_type;
     document.getElementById('es-passing-value').value = r.passing_value;
     document.getElementById('es-visibility').value = r.result_visibility;
+    document.getElementById('es-email-enabled').checked = !!r.email_result_enabled;
 
     esAvailableSections = r.available_sections || {};
     const currentAllocations = r.section_allocations || {};
@@ -2771,7 +2782,8 @@ document.getElementById('btn-es-save').addEventListener('click', async () => {
       p_admin_id: admin.adminId, p_admin_pass: admin.adminPass,
       p_duration_minutes: duration, p_marks_correct: marksCorrect, p_marks_wrong: marksWrong,
       p_passing_type: passingType, p_passing_value: passingValue,
-      p_result_visibility: visibility, p_section_allocations: sectionAllocations
+      p_result_visibility: visibility, p_section_allocations: sectionAllocations,
+      p_email_result_enabled: document.getElementById('es-email-enabled').checked
     });
     if (ok) toast('Exam settings synced to cloud successfully.', 'ok');
     else errEl.textContent = 'Unable to save settings.';
