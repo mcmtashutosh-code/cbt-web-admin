@@ -115,6 +115,9 @@
   .menu-card .mi{font-size:22px; margin-bottom:6px;}
   .menu-card .mt{font-size:15px; font-weight:700; margin-bottom:2px;}
   .menu-card .ms{font-size:12px; color:var(--text-mute);}
+  .dash-stat-chip{background:var(--card); border:1px solid var(--line-soft); border-radius:var(--radius-sm); padding:10px 16px; min-width:110px; text-align:center;}
+  .dash-stat-num{display:block; font-size:20px; font-weight:800; color:var(--accent-text);}
+  .dash-stat-lbl{display:block; font-size:11px; color:var(--text-mute); margin-top:2px;}
 
   .tabs{display:flex; gap:6px; margin:14px 0; background:var(--field-2); padding:5px; border-radius:11px;}
   .tab{flex:1; text-align:center; padding:9px 6px; border-radius:8px; font-size:12px; font-weight:600; color:var(--text-dim); cursor:pointer;}
@@ -229,7 +232,20 @@
   <div class="view" id="view-menu">
     <div class="section-title">Admin dashboard</div>
     <div class="section-sub">Choose what you want to manage.</div>
+
+    <div id="dash-stats-strip" style="display:flex; flex-wrap:wrap; gap:10px; margin:14px 0 20px;">
+      <div class="dash-stat-chip"><span class="dash-stat-num" id="stat-total-students">—</span><span class="dash-stat-lbl">Total students</span></div>
+      <div class="dash-stat-chip"><span class="dash-stat-num" id="stat-self-registered">—</span><span class="dash-stat-lbl">Self-registered</span></div>
+      <div class="dash-stat-chip"><span class="dash-stat-num" id="stat-pending">—</span><span class="dash-stat-lbl">Pending approval</span></div>
+      <div class="dash-stat-chip"><span class="dash-stat-num" id="stat-shares">—</span><span class="dash-stat-lbl">App shares</span></div>
+    </div>
+
     <div class="menu-grid">
+      <div class="menu-card" id="menu-pendingreg">
+        <div class="mi">🆕</div>
+        <div class="mt">Pending registrations <span id="pending-badge" style="display:none; background:#e74c3c; color:#fff; font-size:11px; font-weight:700; padding:2px 7px; border-radius:10px; margin-left:4px;"></span></div>
+        <div class="ms">Review and approve self-registered students</div>
+      </div>
       <div class="menu-card" id="menu-feedback">
         <div class="mi">✉</div>
         <div class="mt">Feedback</div>
@@ -477,6 +493,14 @@
   </div>
 
   <!-- ============ NOTICES & MESSAGES ============ -->
+  <!-- ============ PENDING REGISTRATIONS ============ -->
+  <div class="view" id="view-pendingreg">
+    <div class="section-title">Pending registrations</div>
+    <div class="section-sub">Students who self-registered from the app and are awaiting approval.</div>
+    <div id="pendingreg-list" style="margin-top:16px;"><div class="spin"></div></div>
+    <div class="footer"><span class="lock">Secured by CBT Assessment Platform</span> · Cloud-hosted<br>© 2025 Ashutosh Dubey · All Rights Reserved</div>
+  </div>
+
   <div class="view" id="view-messages">
     <div class="section-title">Notices & messages</div>
     <div class="section-sub">Post announcements and chat with students.</div>
@@ -1028,6 +1052,7 @@ async function doLogin(){
     btn.disabled = false; btn.textContent = 'Sign in';
     startSessionWatch();
     showView('view-menu');
+    loadDashboardStats();
   }catch(err){
     errEl.textContent = 'Connection error. Please check your internet and try again.';
     btn.disabled = false; btn.textContent = 'Sign in';
@@ -1044,6 +1069,81 @@ document.getElementById('menu-findfix').addEventListener('click', openFindFixSec
 document.getElementById('menu-addq').addEventListener('click', openAddQuestionSection);
 document.getElementById('menu-examsettings').addEventListener('click', openExamSettingsSection);
 document.getElementById('menu-messages').addEventListener('click', openMessagesSection);
+document.getElementById('menu-pendingreg').addEventListener('click', () => {
+  showView('view-pendingreg');
+  loadPendingRegistrations();
+});
+
+async function loadDashboardStats(){
+  try{
+    const rows = await rpc('admin_get_dashboard_stats', { p_admin_id: admin.adminId, p_admin_pass: admin.adminPass });
+    const s = rows && rows[0];
+    if (!s) return;
+    document.getElementById('stat-total-students').textContent = s.total_registered;
+    document.getElementById('stat-self-registered').textContent = s.self_registered_count;
+    document.getElementById('stat-pending').textContent = s.pending_approval_count;
+    document.getElementById('stat-shares').textContent = s.total_shares;
+    const badge = document.getElementById('pending-badge');
+    if (s.pending_approval_count > 0){
+      badge.textContent = s.pending_approval_count;
+      badge.style.display = 'inline-block';
+    } else {
+      badge.style.display = 'none';
+    }
+  }catch(err){ /* ignore */ }
+}
+
+async function loadPendingRegistrations(){
+  const list = document.getElementById('pendingreg-list');
+  list.innerHTML = '<div class="spin"></div>';
+  try{
+    const rows = await rpc('admin_get_pending_students', { p_admin_id: admin.adminId, p_admin_pass: admin.adminPass });
+    if (!rows || rows.length === 0){
+      list.innerHTML = '<div class="empty-state">No pending registrations right now.</div>';
+      return;
+    }
+    list.innerHTML = '';
+    rows.forEach(s => {
+      const card = document.createElement('div');
+      card.className = 'ch-manage-card';
+      const details = [
+        s.email ? `📧 ${esc(s.email)}` : '',
+        s.class_name ? `🎓 ${esc(s.class_name)}` : '',
+        s.semester_year ? `📅 ${esc(s.semester_year)}` : '',
+        s.university ? `🏫 ${esc(s.university)}` : '',
+        s.gender ? `⚧ ${esc(s.gender)}` : ''
+      ].filter(Boolean).join(' &nbsp;·&nbsp; ');
+      card.innerHTML = `
+        <div class="ch-manage-q">${esc(s.name)} <span class="ms">(${esc(s.mobile)})</span></div>
+        <div class="ms" style="margin:4px 0 8px;">${details || 'No profile details provided'}</div>
+        <div class="ms" style="margin-bottom:10px;">Registered: ${esc((s.registered_at||'').slice(0,16).replace('T',' '))}</div>
+        <div style="display:flex; gap:8px;">
+          <button class="btn btn-primary btn-sm btn-approve-reg" style="flex:1;">✅ Approve</button>
+          <button class="btn btn-danger btn-sm btn-reject-reg" style="flex:1;">🗑 Reject</button>
+        </div>`;
+      card.querySelector('.btn-approve-reg').addEventListener('click', async () => {
+        try{
+          await rpc('admin_approve_student', { p_admin_id: admin.adminId, p_admin_pass: admin.adminPass, p_mobile: s.mobile });
+          toast(`${s.name} approved.`, 'ok');
+          loadPendingRegistrations();
+          loadDashboardStats();
+        }catch(err){ toast(err.message || 'Unable to approve.', 'err'); }
+      });
+      card.querySelector('.btn-reject-reg').addEventListener('click', async () => {
+        if (!confirm(`Reject and delete the registration for ${s.name} (${s.mobile})? This cannot be undone.`)) return;
+        try{
+          await rpc('admin_reject_student', { p_admin_id: admin.adminId, p_admin_pass: admin.adminPass, p_mobile: s.mobile });
+          toast('Registration rejected.', 'ok');
+          loadPendingRegistrations();
+          loadDashboardStats();
+        }catch(err){ toast(err.message || 'Unable to reject.', 'err'); }
+      });
+      list.appendChild(card);
+    });
+  }catch(err){
+    list.innerHTML = `<div class="empty-state">Unable to load pending registrations.<br><span style="color:#e74c3c; font-size:11px;">${esc(err.message||'')}</span></div>`;
+  }
+}
 
 /* ---------------- FEEDBACK MANAGEMENT ---------------- */
 document.getElementById('filter-row').addEventListener('click', (e) => {
