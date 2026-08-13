@@ -406,6 +406,7 @@
     <!-- EXAM RESULTS -->
     <div class="ctab-panel active" id="rpanel-exam">
       <div class="stat-bar" id="exam-stat-bar"></div>
+      <button class="btn btn-primary btn-sm" id="btn-export-exam-results" style="margin-bottom:14px;">📊 Export results (CSV)</button>
       <div id="exam-results-list"><div class="spin"></div></div>
     </div>
 
@@ -1650,6 +1651,8 @@ async function loadExamConfig(){
   }catch(err){ /* fall back to defaults */ }
 }
 
+let lastExamResultsRows = [];
+
 async function loadExamResults(){
   const listEl = document.getElementById('exam-results-list');
   listEl.innerHTML = '<div class="spin"></div>';
@@ -1657,11 +1660,53 @@ async function loadExamResults(){
   try{
     await loadExamConfig();
     const rows = await rpc('admin_get_all_exam_results', { p_admin_id: admin.adminId, p_admin_pass: admin.adminPass });
+    lastExamResultsRows = rows || [];
     renderExamResults(rows || []);
   }catch(err){
     listEl.innerHTML = '<div class="empty-state">Unable to load exam results right now.</div>';
   }
 }
+
+function csvEscape(val){
+  const s = String(val ?? '');
+  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
+
+document.getElementById('btn-export-exam-results').addEventListener('click', () => {
+  if (!lastExamResultsRows.length){
+    toast('No results to export yet.', 'err');
+    return;
+  }
+  const header = ['Mobile No.', 'Student Name', 'Total Q', 'Correct', 'Wrong', 'Marks Obtained', 'Percentage %', 'Result Status', 'Submitted At'];
+  const lines = [header.join(',')];
+  lastExamResultsRows.forEach(row => {
+    const { pct, status } = computeExamStatus(row);
+    const dt = (row.submitted_at || '').slice(0,16).replace('T',' ');
+    lines.push([
+      csvEscape(row.mobile),
+      csvEscape(row.name),
+      csvEscape(row.total_q || 0),
+      csvEscape(row.correct || 0),
+      csvEscape(row.wrong || 0),
+      csvEscape(row.final_marks || 0),
+      csvEscape(pct),
+      csvEscape(status),
+      csvEscape(dt)
+    ].join(','));
+  });
+  const csvContent = '\uFEFF' + lines.join('\r\n');  // BOM so Excel opens UTF-8 correctly
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const stamp = new Date().toISOString().slice(0,10);
+  a.href = url;
+  a.download = `exam-results-${stamp}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  toast('Results exported.', 'ok');
+});
 
 function computeExamStatus(row){
   const totalQ = row.total_q || 0;
