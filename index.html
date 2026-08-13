@@ -484,6 +484,18 @@
       <button class="btn btn-sm" id="btn-toggle-window">Toggle</button>
     </div>
 
+    <div class="exam-window-card" id="exam-schedule-card" style="flex-direction:column; align-items:stretch; gap:10px;">
+      <div class="ew-left">
+        <div class="ew-label">Scheduled auto-start (optional)</div>
+        <div class="ew-status" id="ew-schedule-status" style="font-size:12px; font-weight:600;">Loading...</div>
+      </div>
+      <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+        <input type="datetime-local" id="es-schedule-input" style="flex:1; min-width:200px;">
+        <button class="btn btn-primary btn-sm" id="btn-set-schedule">Set</button>
+        <button class="btn btn-ghost btn-sm" id="btn-clear-schedule">Clear</button>
+      </div>
+    </div>
+
     <div class="stat-bar" id="live-stat-bar"></div>
 
     <button class="btn btn-ghost btn-sm" id="btn-relogin" style="margin-bottom:8px;">🔓 Allow student re-login (by mobile)</button>
@@ -1961,16 +1973,60 @@ function openLiveSection(){
 async function loadExamWindowStatus(){
   const statusEl = document.getElementById('ew-status');
   try{
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/exam_configurations?select=exam_window_active&id=eq.1`, {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/exam_configurations?select=exam_window_active,scheduled_start_at&id=eq.1`, {
       headers:{ 'apikey':SUPABASE_KEY, 'Authorization':`Bearer ${SUPABASE_KEY}` }
     });
     const rows = await res.json();
     examWindowActive = rows && rows[0] ? (rows[0].exam_window_active !== false) : true;
     renderWindowStatus();
+    renderScheduleStatus(rows && rows[0] ? rows[0].scheduled_start_at : null);
   }catch(err){
     statusEl.textContent = 'Unable to load';
   }
 }
+
+function renderScheduleStatus(scheduledStartAt){
+  const el = document.getElementById('ew-schedule-status');
+  const input = document.getElementById('es-schedule-input');
+  if (!scheduledStartAt){
+    el.textContent = '⚪ No schedule set — exam window toggle is fully manual.';
+    el.style.color = '';
+    input.value = '';
+    return;
+  }
+  const dt = new Date(scheduledStartAt);
+  const pad = n => String(n).padStart(2,'0');
+  input.value = `${dt.getFullYear()}-${pad(dt.getMonth()+1)}-${pad(dt.getDate())}T${pad(dt.getHours())}:${pad(dt.getMinutes())}`;
+  const now = new Date();
+  if (dt > now){
+    el.textContent = `🟡 Scheduled to open: ${dt.toLocaleString()}`;
+    el.style.color = 'var(--warn, #f39c12)';
+  } else {
+    el.textContent = `🟢 Scheduled time has passed (${dt.toLocaleString()}) — exam is open to students.`;
+    el.style.color = 'var(--success)';
+  }
+}
+
+document.getElementById('btn-set-schedule').addEventListener('click', async () => {
+  const val = document.getElementById('es-schedule-input').value;
+  if (!val){ toast('Please pick a date and time first.', 'err'); return; }
+  const iso = new Date(val).toISOString();
+  if (!confirm(`Schedule the exam to auto-open at:\n${new Date(val).toLocaleString()}\n\nStudents won't be able to start before this time, even if the exam window is toggled ON. Confirm?`)) return;
+  try{
+    const ok = await rpc('admin_set_exam_schedule', { p_admin_id: admin.adminId, p_admin_pass: admin.adminPass, p_scheduled_start_at: iso });
+    if (ok){ toast('Exam schedule set.', 'ok'); loadExamWindowStatus(); }
+    else toast('Unable to set schedule.', 'err');
+  }catch(err){ toast('Connection error.', 'err'); }
+});
+
+document.getElementById('btn-clear-schedule').addEventListener('click', async () => {
+  if (!confirm('Clear the scheduled start time? The exam window toggle will fully control access again.')) return;
+  try{
+    const ok = await rpc('admin_set_exam_schedule', { p_admin_id: admin.adminId, p_admin_pass: admin.adminPass, p_scheduled_start_at: null });
+    if (ok){ toast('Schedule cleared.', 'ok'); loadExamWindowStatus(); }
+    else toast('Unable to clear schedule.', 'err');
+  }catch(err){ toast('Connection error.', 'err'); }
+});
 
 function renderWindowStatus(){
   const statusEl = document.getElementById('ew-status');
