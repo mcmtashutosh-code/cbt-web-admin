@@ -192,6 +192,7 @@
   #toast{position:fixed; left:50%; bottom:24px; transform:translateX(-50%) translateY(20px); background:var(--card); border:1px solid var(--line); color:var(--text); padding:12px 18px; border-radius:10px; font-size:13.5px; opacity:0; pointer-events:none; transition:opacity .2s, transform .2s; max-width:88%; text-align:center; z-index:50;}
   #toast.show{opacity:1; transform:translateX(-50%) translateY(0);}
 </style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
 </head>
 <body>
 
@@ -406,7 +407,7 @@
     <!-- EXAM RESULTS -->
     <div class="ctab-panel active" id="rpanel-exam">
       <div class="stat-bar" id="exam-stat-bar"></div>
-      <button class="btn btn-primary btn-sm" id="btn-export-exam-results" style="margin-bottom:14px;">📊 Export results (CSV)</button>
+      <button class="btn btn-primary btn-sm" id="btn-export-exam-results" style="margin-bottom:14px;">📊 Export results (Excel)</button>
       <div id="exam-results-list"><div class="spin"></div></div>
     </div>
 
@@ -1667,45 +1668,89 @@ async function loadExamResults(){
   }
 }
 
-function csvEscape(val){
-  const s = String(val ?? '');
-  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-}
-
-document.getElementById('btn-export-exam-results').addEventListener('click', () => {
+document.getElementById('btn-export-exam-results').addEventListener('click', async () => {
   if (!lastExamResultsRows.length){
     toast('No results to export yet.', 'err');
     return;
   }
-  const header = ['Mobile No.', 'Student Name', 'Total Q', 'Correct', 'Wrong', 'Marks Obtained', 'Percentage %', 'Result Status', 'Submitted At'];
-  const lines = [header.join(',')];
-  lastExamResultsRows.forEach(row => {
-    const { pct, status } = computeExamStatus(row);
-    const dt = (row.submitted_at || '').slice(0,16).replace('T',' ');
-    lines.push([
-      csvEscape(row.mobile),
-      csvEscape(row.name),
-      csvEscape(row.total_q || 0),
-      csvEscape(row.correct || 0),
-      csvEscape(row.wrong || 0),
-      csvEscape(row.final_marks || 0),
-      csvEscape(pct),
-      csvEscape(status),
-      csvEscape(dt)
-    ].join(','));
-  });
-  const csvContent = '\uFEFF' + lines.join('\r\n');  // BOM so Excel opens UTF-8 correctly
-  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  const stamp = new Date().toISOString().slice(0,10);
-  a.href = url;
-  a.download = `exam-results-${stamp}.csv`;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-  toast('Results exported.', 'ok');
+  try{
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet('Results');
+    sheet.columns = [
+      { width: 16 }, { width: 24 }, { width: 15 }, { width: 11 },
+      { width: 11 }, { width: 17 }, { width: 14 }, { width: 15 }
+    ];
+
+    sheet.mergeCells('A1:H1');
+    const titleCell = sheet.getCell('A1');
+    titleCell.value = 'CBT Assessment Platform — Examination Results Report';
+    titleCell.font = { bold: true, size: 16, color: { argb: 'FFFFFFFF' } };
+    titleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1B2A41' } };
+    titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
+    sheet.getRow(1).height = 32;
+
+    sheet.mergeCells('A2:H2');
+    const genCell = sheet.getCell('A2');
+    const now = new Date();
+    const pad = n => String(n).padStart(2, '0');
+    const genStr = `Generated on: ${pad(now.getDate())}-${pad(now.getMonth()+1)}-${now.getFullYear()} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+    genCell.value = genStr;
+    genCell.font = { italic: true, color: { argb: 'FF888888' } };
+    genCell.alignment = { horizontal: 'center' };
+
+    const headerRow = sheet.getRow(3);
+    headerRow.values = ['Mobile No.', 'Student Name', 'Total Questions', '✓ Correct', '✗ Wrong', 'Marks Obtained', 'Percentage %', 'Result Status'];
+    headerRow.font = { bold: true };
+    headerRow.eachCell(cell => {
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD9E2F3' } };
+      cell.alignment = { horizontal: 'center' };
+      cell.border = { bottom: { style: 'thin', color: { argb: 'FFBBBBBB' } } };
+    });
+
+    let passCount = 0, failCount = 0;
+    let rowIdx = 4;
+    lastExamResultsRows.forEach(row => {
+      const { pct, status } = computeExamStatus(row);
+      if (status === 'PASS') passCount++; else failCount++;
+      const r = sheet.getRow(rowIdx);
+      r.values = [row.mobile, row.name, row.total_q || 0, row.correct || 0, row.wrong || 0, row.final_marks || 0, `${pct}%`, status];
+      const fillColor = status === 'PASS' ? 'FFE9F7EC' : 'FFFCEAEA';
+      r.eachCell(cell => { cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: fillColor } }; });
+      r.getCell(1).alignment = { horizontal: 'center' };
+      r.getCell(3).alignment = { horizontal: 'center' };
+      r.getCell(4).alignment = { horizontal: 'center' };
+      r.getCell(5).alignment = { horizontal: 'center' };
+      r.getCell(6).alignment = { horizontal: 'center' };
+      r.getCell(7).alignment = { horizontal: 'center' };
+      const statusCell = r.getCell(8);
+      statusCell.font = { bold: true, color: { argb: status === 'PASS' ? 'FF1E8449' : 'FFC0392B' } };
+      statusCell.alignment = { horizontal: 'center' };
+      rowIdx++;
+    });
+
+    rowIdx++;
+    sheet.mergeCells(`A${rowIdx}:H${rowIdx}`);
+    const footerCell = sheet.getCell(`A${rowIdx}`);
+    footerCell.value = `Total Submitted: ${lastExamResultsRows.length}    |    PASS: ${passCount}    |    FAIL: ${failCount}`;
+    footerCell.font = { bold: true };
+    footerCell.alignment = { horizontal: 'center' };
+    footerCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF1F4F9' } };
+
+    const buf = await workbook.xlsx.writeBuffer();
+    const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const stamp = now.toISOString().slice(0,10);
+    a.href = url;
+    a.download = `exam-results-${stamp}.xlsx`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toast('Results exported.', 'ok');
+  }catch(err){
+    toast('Unable to export results.', 'err');
+  }
 });
 
 function computeExamStatus(row){
