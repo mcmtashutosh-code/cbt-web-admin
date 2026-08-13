@@ -443,6 +443,18 @@
       <input type="file" id="up-practice-file" accept=".csv">
       <div class="error-text" id="up-practice-status"></div>
       <button class="btn btn-primary" id="btn-up-practice" style="margin:10px 0 22px;">📤 Upload practice questions</button>
+
+      <label class="field-label" style="color:var(--danger);">⚠️ Delete practice questions</label>
+      <div class="filter-row" id="del-practice-scope">
+        <div class="filter-chip sel" data-s="all">Delete all</div>
+        <div class="filter-chip" data-s="topic">Delete by subject/topic</div>
+      </div>
+      <div id="del-practice-topic-wrap" style="display:none; margin-top:8px;">
+        <select id="del-practice-subject"><option value="">Loading subjects...</option></select>
+        <select id="del-practice-topic" style="margin-top:8px;"><option value="">Select a subject first</option></select>
+      </div>
+      <div class="error-text" id="del-practice-status"></div>
+      <button class="btn btn-danger" id="btn-del-practice" style="margin:10px 0 22px;">🗑 Delete questions</button>
     </div>
 
     <!-- EXAM QUESTIONS UPLOAD -->
@@ -1976,7 +1988,84 @@ async function refreshPracticeQuestionCount(){
   }catch(err){
     el.textContent = 'Unable to load current question count.';
   }
+  loadDeletePracticeSubjects();
 }
+
+async function loadDeletePracticeSubjects(){
+  const subjSel = document.getElementById('del-practice-subject');
+  const topicSel = document.getElementById('del-practice-topic');
+  subjSel.innerHTML = '<option value="">Loading subjects...</option>';
+  try{
+    const rows = await restGetAll('practice_questions', 'select=subject,topic');
+    const norm = v => (v || '').trim() || 'General';
+    const bySubject = {};
+    rows.forEach(r => {
+      const sub = norm(r.subject), top = norm(r.topic);
+      bySubject[sub] = bySubject[sub] || new Set();
+      bySubject[sub].add(top);
+    });
+    const subjects = Object.keys(bySubject).sort();
+    if (!subjects.length){
+      subjSel.innerHTML = '<option value="">No questions available</option>';
+      topicSel.innerHTML = '<option value=""></option>';
+      return;
+    }
+    subjSel.innerHTML = subjects.map(s => `<option value="${esc(s)}">${esc(s)}</option>`).join('');
+    const renderTopics = () => {
+      const topics = Array.from(bySubject[subjSel.value] || []).sort();
+      topicSel.innerHTML = topics.map(t => `<option value="${esc(t)}">${esc(t)}</option>`).join('');
+    };
+    subjSel.onchange = renderTopics;
+    renderTopics();
+  }catch(err){
+    subjSel.innerHTML = '<option value="">Unable to load</option>';
+  }
+}
+
+document.getElementById('del-practice-scope').addEventListener('click', (e) => {
+  const chip = e.target.closest('.filter-chip');
+  if (!chip) return;
+  document.querySelectorAll('#del-practice-scope .filter-chip').forEach(c => c.classList.remove('sel'));
+  chip.classList.add('sel');
+  document.getElementById('del-practice-topic-wrap').style.display = chip.dataset.s === 'topic' ? 'block' : 'none';
+});
+
+document.getElementById('btn-del-practice').addEventListener('click', async () => {
+  const statusEl = document.getElementById('del-practice-status');
+  statusEl.textContent = '';
+  const scope = document.querySelector('#del-practice-scope .filter-chip.sel').dataset.s;
+
+  let subject = null, topic = null, label = 'ALL practice questions';
+  if (scope === 'topic'){
+    subject = document.getElementById('del-practice-subject').value;
+    topic = document.getElementById('del-practice-topic').value;
+    if (!subject || !topic){ statusEl.textContent = 'Please select a subject and topic.'; return; }
+    label = `all practice questions under "${subject} → ${topic}"`;
+  }
+
+  if (!confirm(`Are you sure you want to permanently delete ${label}?\n\nThis cannot be undone unless you have a backup CSV.`)) return;
+  const typed = prompt(`To confirm, type DELETE (in capitals):`);
+  if (typed !== 'DELETE'){ statusEl.textContent = 'Deletion cancelled.'; return; }
+
+  const btn = document.getElementById('btn-del-practice');
+  btn.disabled = true; btn.textContent = 'Deleting...';
+  try{
+    const count = await rpc('admin_delete_practice_questions', {
+      p_admin_id: admin.adminId, p_admin_pass: admin.adminPass,
+      p_subject: subject, p_topic: topic
+    });
+    if (count >= 0){
+      toast(`${count} question(s) deleted.`, 'ok');
+      refreshPracticeQuestionCount();
+    } else {
+      statusEl.textContent = 'Delete failed. Please try again.';
+    }
+  }catch(err){
+    statusEl.textContent = err.message || 'Unable to delete questions.';
+  }finally{
+    btn.disabled = false; btn.textContent = '🗑 Delete questions';
+  }
+});
 const utabPractice = document.getElementById('utab-practice');
 const utabExam = document.getElementById('utab-exam');
 const utabStudents = document.getElementById('utab-students');
