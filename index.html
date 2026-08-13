@@ -433,10 +433,11 @@
     <!-- PRACTICE QUESTIONS UPLOAD -->
     <div class="ctab-panel active" id="upanel-practice">
       <div class="upload-hint">Required columns: <code>question, option1, option2, option3, option4, correct_index</code>. Optional: <code>subject, topic, difficulty</code>.</div>
+      <div class="upload-hint" id="practice-total-count" style="font-weight:700;">Loading current question count...</div>
+      <button class="btn btn-ghost btn-sm" id="btn-backup-practice" style="margin-bottom:12px;">📥 Download backup (CSV)</button>
       <label class="field-label">Mode</label>
       <div class="filter-row" id="up-practice-mode">
-        <div class="filter-chip" data-m="append">Append</div>
-        <div class="filter-chip sel" data-m="overwrite">Overwrite</div>
+        <div class="filter-chip sel" data-m="append">Append</div>
       </div>
       <label class="field-label">CSV file</label>
       <input type="file" id="up-practice-file" accept=".csv">
@@ -447,6 +448,7 @@
     <!-- EXAM QUESTIONS UPLOAD -->
     <div class="ctab-panel" id="upanel-exam">
       <div class="upload-hint">Required columns: <code>question, option1, option2, option3, option4, correct_index</code>. Optional: <code>section, subject, topic, difficulty, di_content, di_group, di_image</code>.</div>
+      <button class="btn btn-ghost btn-sm" id="btn-backup-exam" style="margin-bottom:12px;">📥 Download backup (CSV)</button>
       <label class="field-label">Mode</label>
       <div class="filter-row" id="up-exam-mode">
         <div class="filter-chip" data-m="append">Append</div>
@@ -461,10 +463,10 @@
     <!-- STUDENTS UPLOAD -->
     <div class="ctab-panel" id="upanel-students">
       <div class="upload-hint">Required columns: <code>name, mobile</code> (exactly 10 digits). Password is auto-generated as first 2 letters of the name + last 4 digits of the mobile number — e.g. Rahul Kumar, 9876543210 → <code>ra3210</code>.</div>
+      <button class="btn btn-ghost btn-sm" id="btn-backup-students" style="margin-bottom:12px;">📥 Download backup (CSV)</button>
       <label class="field-label">Mode</label>
       <div class="filter-row" id="up-students-mode">
-        <div class="filter-chip" data-m="append">Append</div>
-        <div class="filter-chip sel" data-m="overwrite">Overwrite</div>
+        <div class="filter-chip sel" data-m="append">Append</div>
       </div>
       <label class="field-label">CSV file</label>
       <input type="file" id="up-students-file" accept=".csv">
@@ -1022,6 +1024,102 @@ async function rpc(fn, body){
   }
   return res.json();
 }
+
+async function restGetAll(table, query){
+  const pageSize = 1000;
+  let all = [];
+  let from = 0;
+  while (true){
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}?${query}`, {
+      headers:{
+        'apikey':SUPABASE_KEY, 'Authorization':`Bearer ${SUPABASE_KEY}`,
+        'Range-Unit':'items', 'Range': `${from}-${from+pageSize-1}`
+      }
+    });
+    if (!res.ok && res.status !== 206) throw new Error(`Fetch failed (${res.status})`);
+    const batch = await res.json();
+    all = all.concat(batch);
+    if (batch.length < pageSize) break;
+    from += pageSize;
+  }
+  return all;
+}
+
+function csvEsc(val){
+  const s = String(val ?? '');
+  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
+
+function confirmOverwrite(mode, itemLabel){
+  if (mode !== 'overwrite') return true;
+  const typed = prompt(
+    `⚠️ OVERWRITE MODE will permanently DELETE ALL existing ${itemLabel} and replace them with only what's in this CSV file.\n\n` +
+    `This cannot be undone unless you have your own backup.\n\n` +
+    `Type OVERWRITE (in capitals) to confirm, or Cancel to stop.`
+  );
+  return typed === 'OVERWRITE';
+}
+
+function downloadCsv(filenamePrefix, headerCols, rows){
+  const lines = [headerCols.join(',')];
+  rows.forEach(r => lines.push(r.map(csvEsc).join(',')));
+  const csvContent = '\uFEFF' + lines.join('\r\n');
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const stamp = new Date().toISOString().slice(0,10);
+  a.href = url;
+  a.download = `${filenamePrefix}-backup-${stamp}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+document.getElementById('btn-backup-practice').addEventListener('click', async () => {
+  const btn = document.getElementById('btn-backup-practice');
+  btn.disabled = true; btn.textContent = 'Preparing backup...';
+  try{
+    const rows = await restGetAll('practice_questions', 'select=*');
+    if (!rows.length){ toast('No practice questions to back up.', 'err'); return; }
+    downloadCsv('practice-questions',
+      ['question','option1','option2','option3','option4','correct_index','subject','topic','difficulty','solution'],
+      rows.map(r => [r.question,r.option1,r.option2,r.option3,r.option4,r.correct_index,r.subject,r.topic,r.difficulty,r.solution])
+    );
+    toast(`Backed up ${rows.length} practice question(s).`, 'ok');
+  }catch(err){ toast('Unable to create backup.', 'err'); }
+  finally{ btn.disabled = false; btn.textContent = '📥 Download backup (CSV)'; }
+});
+
+document.getElementById('btn-backup-exam').addEventListener('click', async () => {
+  const btn = document.getElementById('btn-backup-exam');
+  btn.disabled = true; btn.textContent = 'Preparing backup...';
+  try{
+    const rows = await restGetAll('questions', 'select=*');
+    if (!rows.length){ toast('No exam questions to back up.', 'err'); return; }
+    downloadCsv('exam-questions',
+      ['question','option1','option2','option3','option4','correct_index','section','subject','topic','difficulty','di_content','di_group','di_image'],
+      rows.map(r => [r.question,r.option1,r.option2,r.option3,r.option4,r.correct_index,r.section,r.subject,r.topic,r.difficulty,r.di_content,r.di_group,r.di_image])
+    );
+    toast(`Backed up ${rows.length} exam question(s).`, 'ok');
+  }catch(err){ toast('Unable to create backup.', 'err'); }
+  finally{ btn.disabled = false; btn.textContent = '📥 Download backup (CSV)'; }
+});
+
+document.getElementById('btn-backup-students').addEventListener('click', async () => {
+  const btn = document.getElementById('btn-backup-students');
+  btn.disabled = true; btn.textContent = 'Preparing backup...';
+  try{
+    const rows = await rpc('admin_export_students', { p_admin_id: admin.adminId, p_admin_pass: admin.adminPass });
+    if (!rows || !rows.length){ toast('No students to back up.', 'err'); return; }
+    downloadCsv('students',
+      ['mobile','name','password','email','class_name','semester_year','university','gender'],
+      rows.map(r => [r.mobile,r.name,r.password,r.email,r.class_name,r.semester_year,r.university,r.gender])
+    );
+    toast(`Backed up ${rows.length} student(s).`, 'ok');
+  }catch(err){ toast('Unable to create backup.', 'err'); }
+  finally{ btn.disabled = false; btn.textContent = '📥 Download backup (CSV)'; }
+});
 
 /* ---------------- LOGIN ---------------- */
 const pwInput = document.getElementById('in-admin-pass');
@@ -1866,6 +1964,18 @@ document.getElementById('btn-clear-practice').addEventListener('click', async ()
 function openUploadSection(){
   showView('view-upload');
   setUploadTab('practice');
+  refreshPracticeQuestionCount();
+}
+
+async function refreshPracticeQuestionCount(){
+  const el = document.getElementById('practice-total-count');
+  el.textContent = 'Loading current question count...';
+  try{
+    const rows = await restGetAll('practice_questions', 'select=id');
+    el.textContent = `📊 Currently uploaded: ${rows.length} practice question${rows.length === 1 ? '' : 's'}`;
+  }catch(err){
+    el.textContent = 'Unable to load current question count.';
+  }
 }
 const utabPractice = document.getElementById('utab-practice');
 const utabExam = document.getElementById('utab-exam');
@@ -1886,8 +1996,8 @@ utabPractice.addEventListener('click', () => setUploadTab('practice'));
 utabExam.addEventListener('click', () => setUploadTab('exam'));
 utabStudents.addEventListener('click', () => setUploadTab('students'));
 
-function wireModeChips(rowId){
-  let mode = 'overwrite';
+function wireModeChips(rowId, defaultMode){
+  let mode = defaultMode || 'overwrite';
   document.getElementById(rowId).addEventListener('click', (e) => {
     const chip = e.target.closest('.filter-chip');
     if (!chip) return;
@@ -1897,9 +2007,9 @@ function wireModeChips(rowId){
   });
   return () => mode;
 }
-const getPracticeMode = wireModeChips('up-practice-mode');
+const getPracticeMode = wireModeChips('up-practice-mode', 'append');
 const getExamMode = wireModeChips('up-exam-mode');
-const getStudentsMode = wireModeChips('up-students-mode');
+const getStudentsMode = wireModeChips('up-students-mode', 'append');
 
 /* Minimal RFC4180-style CSV parser (handles quoted fields with commas/newlines) */
 function parseCSV(text){
@@ -1967,8 +2077,9 @@ document.getElementById('btn-up-practice').addEventListener('click', async () =>
       });
     }
     if (!payload.length){ statusEl.textContent = 'No valid rows found in the CSV file.'; return; }
+    if (!confirmOverwrite(getPracticeMode(), 'practice questions')){ statusEl.textContent = 'Upload cancelled.'; return; }
     const count = await rpc('admin_upload_practice_questions', { p_admin_id: admin.adminId, p_admin_pass: admin.adminPass, p_mode: getPracticeMode(), p_data: payload });
-    if (count >= 0){ toast(`${count} practice question(s) uploaded.`, 'ok'); fileInput.value = ''; }
+    if (count >= 0){ toast(`${count} practice question(s) uploaded.`, 'ok'); fileInput.value = ''; refreshPracticeQuestionCount(); }
     else statusEl.textContent = 'Upload failed. Please try again.';
   }catch(err){
     statusEl.textContent = 'Unable to process this file: ' + (err.message || 'unknown error') + '. Please check the format and try again.';
@@ -1999,6 +2110,7 @@ document.getElementById('btn-up-exam').addEventListener('click', async () => {
       });
     }
     if (!payload.length){ statusEl.textContent = 'No valid rows found in the CSV file.'; return; }
+    if (!confirmOverwrite(getExamMode(), 'exam questions')){ statusEl.textContent = 'Upload cancelled.'; return; }
     const count = await rpc('admin_upload_exam_questions', { p_admin_id: admin.adminId, p_admin_pass: admin.adminPass, p_mode: getExamMode(), p_data: payload });
     if (count >= 0){ toast(`${count} exam question(s) uploaded.`, 'ok'); fileInput.value = ''; }
     else statusEl.textContent = 'Upload failed. Please try again.';
@@ -2032,6 +2144,7 @@ document.getElementById('btn-up-students').addEventListener('click', async () =>
       payload.push({ mobile, name, password });
     }
     if (!payload.length){ statusEl.textContent = 'No valid rows found in the CSV file.'; return; }
+    if (!confirmOverwrite(getStudentsMode(), 'registered students')){ statusEl.textContent = 'Upload cancelled.'; return; }
     const count = await rpc('admin_upload_students', { p_admin_id: admin.adminId, p_admin_pass: admin.adminPass, p_mode: getStudentsMode(), p_data: payload });
     if (count >= 0){
       let msg = `${count} student(s) uploaded. Password format: first 2 letters of name + last 4 digits of mobile.`;
