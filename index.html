@@ -987,6 +987,7 @@ function updateTopBack(id){
 
 let sessionPollIntervalId = null;
 let myDeviceLabel = null;
+let liveRefreshIntervalId = null;
 
 function getDeviceLabel(){
   const ua = navigator.userAgent;
@@ -1971,5 +1972,4 @@ function renderExamResults(rows){
     return;
   }
   let passCount = 0, failCount = 0;
-  const cards = rows.map(row => {
-    const { pct, s
+  const cards = ro
