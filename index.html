@@ -1972,4 +1972,76 @@ function renderExamResults(rows){
     return;
   }
   let passCount = 0, failCount = 0;
-  const cards = ro
+  const cards = rows.map(row => {
+    const { pct, status } = computeExamStatus(row);
+    if (status === 'PASS') passCount++; else failCount++;
+    const pillClass = status === 'PASS' ? 'st-replied' : 'st-new';
+    return `<div class="ch-manage-card">
+      <div class="ch-manage-q">${esc(row.name)} <span class="ms">(${esc(maskMobile(row.mobile))})</span>
+        <span class="status-pill ${pillClass}" style="margin-left:6px;">${status}</span>
+      </div>
+      <div class="stu-meta" style="margin:4px 0 2px;">Total: ${row.total_q || 0} · Correct: ${row.correct || 0} · Wrong: ${row.wrong || 0} · Marks: ${row.final_marks || 0} · Score: ${pct}%${row.tab_switch_count ? ` · <span style="color:var(--warn);">👁 ${row.tab_switch_count} tab switch${row.tab_switch_count===1?'':'es'}</span>` : ''}</div>
+    </div>`;
+  });
+
+  statBar.innerHTML = `
+    <div class="stat-box"><div class="sv">${rows.length}</div><div class="sk">Submitted</div></div>
+    <div class="stat-box"><div class="sv">${passCount}</div><div class="sk">Pass</div></div>
+    <div class="stat-box"><div class="sv">${failCount}</div><div class="sk">Fail</div></div>`;
+  listEl.innerHTML = cards.join('');
+}
+
+/* ==========================================================================
+   ⚠️ RESTORED-AS-STUB NOTICE
+   The functions below (openUploadSection, openLiveSection, openSettingsSection,
+   openFindFixSection, openAddQuestionSection, openExamSettingsSection,
+   openMessagesSection, loadPracticeSessions) were REFERENCED in this file but
+   their actual implementation code was NOT present in the uploaded file --
+   the file was truncated at ~99,950 characters before this code was reached.
+   These stubs only make navigation safe (no crash) by switching to the
+   correct view. They do NOT load or save any data for these sections yet.
+   Replace each stub with your original implementation from your full source
+   file (GitHub repo / local backup) to restore full functionality.
+   ========================================================================== */
+
+function openUploadSection(){
+  showView('view-upload');
+}
+
+function openLiveSection(){
+  showView('view-live');
+  const el = document.getElementById('live-sessions-list');
+  if (el) el.innerHTML = '<div class="empty-state">⚠️ Live monitoring code was missing from the uploaded file and needs to be restored from your complete source.</div>';
+}
+
+function openSettingsSection(){
+  showView('view-settings');
+}
+
+function openFindFixSection(){
+  showView('view-findfix');
+}
+
+function openAddQuestionSection(){
+  showView('view-addq');
+}
+
+function openExamSettingsSection(){
+  showView('view-examsettings');
+}
+
+function openMessagesSection(){
+  showView('view-messages');
+  const el = document.getElementById('admin-messages-list');
+  if (el) el.innerHTML = '<div class="empty-state">⚠️ Admin messages code was missing from the uploaded file and needs to be restored from your complete source.</div>';
+}
+
+function loadPracticeSessions(){
+  const el = document.getElementById('practice-sessions-list');
+  if (el) el.innerHTML = '<div class="empty-state">⚠️ Practice sessions code was missing from the uploaded file and needs to be restored from your complete source.</div>';
+  const statBar = document.getElementById('prac-stat-bar');
+  if (statBar) statBar.innerHTML = '';
+}
+</script>
+</body>
+</html>
