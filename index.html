@@ -2291,27 +2291,15 @@ document.getElementById('btn-bx-modal-confirm').addEventListener('click', async 
 });
 
 /* ==========================================================================
-   ⚠️ RESTORED-AS-STUB NOTICE
-   The functions below (openUploadSection, openLiveSection, openSettingsSection,
-   openFindFixSection, openAddQuestionSection, openExamSettingsSection,
-   openMessagesSection, loadPracticeSessions) were REFERENCED in this file but
-   their actual implementation code was NOT present in the uploaded file --
-   the file was truncated at ~99,950 characters before this code was reached.
-   These stubs only make navigation safe (no crash) by switching to the
-   correct view. They do NOT load or save any data for these sections yet.
-   Replace each stub with your original implementation from your full source
-   file (GitHub repo / local backup) to restore full functionality.
+   ⚠️ REMAINING STUB NOTICE
+   The functions below (openSettingsSection, openFindFixSection,
+   openAddQuestionSection, openMessagesSection) are still placeholder stubs —
+   these involve image-upload-to-storage and messaging logic that needs a
+   quick RPC-output check before wiring, planned as the next phase.
+   openUploadSection, openLiveSection, openExamSettingsSection, and
+   loadPracticeSessions have been fully restored below using the confirmed
+   Supabase RPC list.
    ========================================================================== */
-
-function openUploadSection(){
-  showView('view-upload');
-}
-
-function openLiveSection(){
-  showView('view-live');
-  const el = document.getElementById('live-sessions-list');
-  if (el) el.innerHTML = '<div class="empty-state">⚠️ Live monitoring code was missing from the uploaded file and needs to be restored from your complete source.</div>';
-}
 
 function openSettingsSection(){
   showView('view-settings');
@@ -2325,22 +2313,579 @@ function openAddQuestionSection(){
   showView('view-addq');
 }
 
-function openExamSettingsSection(){
-  showView('view-examsettings');
-}
-
 function openMessagesSection(){
   showView('view-messages');
   const el = document.getElementById('admin-messages-list');
-  if (el) el.innerHTML = '<div class="empty-state">⚠️ Admin messages code was missing from the uploaded file and needs to be restored from your complete source.</div>';
+  if (el) el.innerHTML = '<div class="empty-state">⚠️ Coming in the next phase.</div>';
 }
 
-function loadPracticeSessions(){
-  const el = document.getElementById('practice-sessions-list');
-  if (el) el.innerHTML = '<div class="empty-state">⚠️ Practice sessions code was missing from the uploaded file and needs to be restored from your complete source.</div>';
-  const statBar = document.getElementById('prac-stat-bar');
-  if (statBar) statBar.innerHTML = '';
+/* ==========================================================================
+   CSV PARSER (RFC4180-ish — handles quoted fields with commas/newlines)
+   ========================================================================== */
+function parseCsvText(text){
+  const t = text.replace(/^\uFEFF/, '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+  const rows = [];
+  let row = [], field = '', inQuotes = false;
+  for (let i = 0; i < t.length; i++){
+    const c = t[i];
+    if (inQuotes){
+      if (c === '"'){
+        if (t[i+1] === '"'){ field += '"'; i++; }
+        else { inQuotes = false; }
+      } else field += c;
+    } else {
+      if (c === '"') inQuotes = true;
+      else if (c === ','){ row.push(field); field = ''; }
+      else if (c === '\n'){ row.push(field); rows.push(row); row = []; field = ''; }
+      else field += c;
+    }
+  }
+  if (field.length || row.length){ row.push(field); rows.push(row); }
+  while (rows.length && rows[rows.length-1].every(f => f === '')) rows.pop();
+  if (!rows.length) return [];
+  const headers = rows[0].map(h => h.trim());
+  return rows.slice(1).map(r => {
+    const obj = {};
+    headers.forEach((h, i) => {
+      if (!h) return;
+      let v = r[i] !== undefined ? r[i] : '';
+      obj[h] = v === '' ? null : v;
+    });
+    return obj;
+  });
 }
+
+function readFileAsText(file){
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(new Error('Could not read the file.'));
+    reader.readAsText(file, 'UTF-8');
+  });
+}
+
+const INT_FIELDS = new Set(['correct_index']);
+
+function coerceRowTypes(row){
+  const out = {};
+  Object.keys(row).forEach(k => {
+    let v = row[k];
+    if (INT_FIELDS.has(k) && v !== null) v = parseInt(v, 10);
+    out[k] = v;
+  });
+  return out;
+}
+
+/* ==========================================================================
+   CSV UPLOAD SECTION
+   ========================================================================== */
+function openUploadSection(){
+  showView('view-upload');
+  document.getElementById('up-practice-status').textContent = '';
+  document.getElementById('up-exam-status').textContent = '';
+  document.getElementById('up-students-status').textContent = '';
+  refreshPracticeTotalCount();
+  loadDeletePracticeSubjects();
+}
+
+async function refreshPracticeTotalCount(){
+  const el = document.getElementById('practice-total-count');
+  try{
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/practice_questions?select=id`, {
+      method: 'HEAD',
+      headers:{ 'apikey':SUPABASE_KEY, 'Authorization':`Bearer ${SUPABASE_KEY}`, 'Prefer':'count=exact' }
+    });
+    const range = res.headers.get('content-range');
+    const total = range ? range.split('/')[1] : '?';
+    el.textContent = `Practice bank currently has ${total} question(s).`;
+  }catch(err){
+    el.textContent = 'Could not load current question count.';
+  }
+}
+
+/* ---- Upload tab switching ---- */
+function setUploadTab(tab){
+  document.getElementById('utab-practice').classList.toggle('active', tab === 'practice');
+  document.getElementById('utab-exam').classList.toggle('active', tab === 'exam');
+  document.getElementById('utab-students').classList.toggle('active', tab === 'students');
+  document.getElementById('upanel-practice').classList.toggle('active', tab === 'practice');
+  document.getElementById('upanel-exam').classList.toggle('active', tab === 'exam');
+  document.getElementById('upanel-students').classList.toggle('active', tab === 'students');
+}
+document.getElementById('utab-practice').addEventListener('click', () => setUploadTab('practice'));
+document.getElementById('utab-exam').addEventListener('click', () => setUploadTab('exam'));
+document.getElementById('utab-students').addEventListener('click', () => setUploadTab('students'));
+
+/* ---- Mode chip pickers (generic) ---- */
+function wireModeChips(containerId, attr){
+  const el = document.getElementById(containerId);
+  el.addEventListener('click', (e) => {
+    const chip = e.target.closest('.filter-chip');
+    if (!chip) return;
+    el.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('sel'));
+    chip.classList.add('sel');
+  });
+  return () => el.querySelector('.filter-chip.sel')?.dataset[attr] || 'append';
+}
+const getPracticeUploadMode = wireModeChips('up-practice-mode', 'm');
+const getExamUploadMode = wireModeChips('up-exam-mode', 'm');
+const getStudentsUploadMode = wireModeChips('up-students-mode', 'm');
+
+/* ---- Practice questions upload ---- */
+document.getElementById('btn-up-practice').addEventListener('click', async () => {
+  const statusEl = document.getElementById('up-practice-status');
+  const fileInput = document.getElementById('up-practice-file');
+  const btn = document.getElementById('btn-up-practice');
+  statusEl.textContent = '';
+  const file = fileInput.files[0];
+  if (!file){ statusEl.textContent = 'Choose a CSV file first.'; return; }
+  const mode = getPracticeUploadMode();
+  if (!confirmOverwrite(mode, 'practice questions')) return;
+  btn.disabled = true; btn.textContent = 'Uploading...';
+  try{
+    const text = await readFileAsText(file);
+    const rows = parseCsvText(text).map(coerceRowTypes);
+    if (!rows.length) throw new Error('No rows found in the CSV file.');
+    const result = await rpc('admin_upload_practice_questions', {
+      p_admin_id: admin.adminId, p_admin_pass: admin.adminPass, p_mode: mode, p_data: rows
+    });
+    const count = (result && result.inserted) || rows.length;
+    statusEl.style.color = 'var(--success)';
+    statusEl.textContent = `✅ Uploaded ${count} practice question(s).`;
+    fileInput.value = '';
+    refreshPracticeTotalCount();
+    loadDeletePracticeSubjects();
+    toast('Practice questions uploaded.', 'ok');
+  }catch(err){
+    statusEl.style.color = 'var(--danger)';
+    statusEl.textContent = 'Upload failed: ' + err.message;
+  }finally{
+    btn.disabled = false; btn.textContent = '📤 Upload practice questions';
+  }
+});
+
+/* ---- Exam questions upload ---- */
+document.getElementById('btn-up-exam').addEventListener('click', async () => {
+  const statusEl = document.getElementById('up-exam-status');
+  const fileInput = document.getElementById('up-exam-file');
+  const btn = document.getElementById('btn-up-exam');
+  statusEl.textContent = '';
+  const file = fileInput.files[0];
+  if (!file){ statusEl.textContent = 'Choose a CSV file first.'; return; }
+  const mode = getExamUploadMode();
+  if (!confirmOverwrite(mode, 'live exam questions')) return;
+  btn.disabled = true; btn.textContent = 'Uploading...';
+  try{
+    const text = await readFileAsText(file);
+    const rows = parseCsvText(text).map(coerceRowTypes);
+    if (!rows.length) throw new Error('No rows found in the CSV file.');
+    const result = await rpc('admin_upload_exam_questions', {
+      p_admin_id: admin.adminId, p_admin_pass: admin.adminPass, p_mode: mode, p_data: rows
+    });
+    const count = (result && result.inserted) || rows.length;
+    statusEl.style.color = 'var(--success)';
+    statusEl.textContent = `✅ Uploaded ${count} exam question(s).`;
+    fileInput.value = '';
+    toast('Exam questions uploaded.', 'ok');
+  }catch(err){
+    statusEl.style.color = 'var(--danger)';
+    statusEl.textContent = 'Upload failed: ' + err.message;
+  }finally{
+    btn.disabled = false; btn.textContent = '📤 Upload exam questions';
+  }
+});
+
+/* ---- Students upload ---- */
+document.getElementById('btn-up-students').addEventListener('click', async () => {
+  const statusEl = document.getElementById('up-students-status');
+  const fileInput = document.getElementById('up-students-file');
+  const btn = document.getElementById('btn-up-students');
+  statusEl.textContent = '';
+  const file = fileInput.files[0];
+  if (!file){ statusEl.textContent = 'Choose a CSV file first.'; return; }
+  const mode = getStudentsUploadMode();
+  btn.disabled = true; btn.textContent = 'Uploading...';
+  try{
+    const text = await readFileAsText(file);
+    const rows = parseCsvText(text);
+    if (!rows.length) throw new Error('No rows found in the CSV file.');
+    const result = await rpc('admin_upload_students', {
+      p_admin_id: admin.adminId, p_admin_pass: admin.adminPass, p_mode: mode, p_data: rows
+    });
+    const count = (result && result.inserted) || rows.length;
+    statusEl.style.color = 'var(--success)';
+    statusEl.textContent = `✅ Uploaded ${count} student(s).`;
+    fileInput.value = '';
+    toast('Students uploaded.', 'ok');
+  }catch(err){
+    statusEl.style.color = 'var(--danger)';
+    statusEl.textContent = 'Upload failed: ' + err.message;
+  }finally{
+    btn.disabled = false; btn.textContent = '📤 Upload students';
+  }
+});
+
+/* ---- Delete practice questions ---- */
+let delPracticeMap = {};
+async function loadDeletePracticeSubjects(){
+  const subjSel = document.getElementById('del-practice-subject');
+  const topicSel = document.getElementById('del-practice-topic');
+  subjSel.innerHTML = '<option value="">Loading subjects...</option>';
+  try{
+    const rows = await restGetAll('practice_questions', 'select=subject,topic');
+    delPracticeMap = {};
+    rows.forEach(r => {
+      const s = (r.subject || '').trim() || 'Uncategorized';
+      const t = (r.topic || '').trim();
+      if (!t) return;
+      if (!delPracticeMap[s]) delPracticeMap[s] = new Set();
+      delPracticeMap[s].add(t);
+    });
+    const subjects = Object.keys(delPracticeMap).sort();
+    if (!subjects.length){
+      subjSel.innerHTML = '<option value="">No subjects found</option>';
+      return;
+    }
+    subjSel.innerHTML = subjects.map(s => `<option value="${esc(s)}">${esc(s)}</option>`).join('');
+    fillDeletePracticeTopics(subjects[0]);
+  }catch(err){
+    subjSel.innerHTML = '<option value="">Could not load subjects</option>';
+  }
+}
+function fillDeletePracticeTopics(subject){
+  const topicSel = document.getElementById('del-practice-topic');
+  const topics = Array.from(delPracticeMap[subject] || []).sort();
+  topicSel.innerHTML = topics.length
+    ? topics.map(t => `<option value="${esc(t)}">${esc(t)}</option>`).join('')
+    : '<option value="">No topics found</option>';
+}
+document.getElementById('del-practice-subject').addEventListener('change', (e) => {
+  fillDeletePracticeTopics(e.target.value);
+});
+document.getElementById('del-practice-scope').addEventListener('click', (e) => {
+  const chip = e.target.closest('.filter-chip');
+  if (!chip) return;
+  document.querySelectorAll('#del-practice-scope .filter-chip').forEach(c => c.classList.remove('sel'));
+  chip.classList.add('sel');
+  document.getElementById('del-practice-topic-wrap').style.display = chip.dataset.s === 'topic' ? 'block' : 'none';
+});
+document.getElementById('btn-del-practice').addEventListener('click', async () => {
+  const statusEl = document.getElementById('del-practice-status');
+  const scope = document.querySelector('#del-practice-scope .filter-chip.sel')?.dataset.s || 'all';
+  statusEl.textContent = '';
+  let p_subject = null, p_topic = null, label = 'ALL practice questions';
+  if (scope === 'topic'){
+    p_subject = document.getElementById('del-practice-subject').value || null;
+    p_topic = document.getElementById('del-practice-topic').value || null;
+    if (!p_subject || !p_topic){ statusEl.textContent = 'Pick a subject and topic first.'; return; }
+    label = `all "${p_topic}" (${p_subject}) practice questions`;
+  }
+  const typed = prompt(`⚠️ This will permanently DELETE ${label}.\n\nThis cannot be undone unless you have a backup.\n\nType DELETE (in capitals) to confirm.`);
+  if (typed !== 'DELETE') return;
+  const btn = document.getElementById('btn-del-practice');
+  btn.disabled = true; btn.textContent = 'Deleting...';
+  try{
+    await rpc('admin_delete_practice_questions', {
+      p_admin_id: admin.adminId, p_admin_pass: admin.adminPass, p_subject, p_topic
+    });
+    statusEl.style.color = 'var(--success)';
+    statusEl.textContent = '✅ Deleted successfully.';
+    refreshPracticeTotalCount();
+    loadDeletePracticeSubjects();
+    toast('Practice questions deleted.', 'ok');
+  }catch(err){
+    statusEl.style.color = 'var(--danger)';
+    statusEl.textContent = 'Delete failed: ' + err.message;
+  }finally{
+    btn.disabled = false; btn.textContent = '🗑 Delete questions';
+  }
+});
+
+/* ==========================================================================
+   LIVE EXAM MONITORING
+   ========================================================================== */
+let liveSessionsLastSignature = null;
+
+function openLiveSection(){
+  showView('view-live');
+  loadLiveExamWindow();
+  loadLiveSchedule();
+  loadLiveSessions(true);
+  liveRefreshIntervalId = setInterval(() => loadLiveSessions(false), 5000);
+}
+
+async function loadLiveExamWindow(){
+  const statusEl = document.getElementById('ew-status');
+  try{
+    const rows = await restGetAll('exam_configurations', 'select=exam_window_active&id=eq.1');
+    const active = rows && rows[0] ? !!rows[0].exam_window_active : false;
+    statusEl.textContent = active ? '🟢 OPEN — students can start the exam' : '🔴 CLOSED — students cannot start the exam';
+    statusEl.dataset.active = active ? '1' : '0';
+  }catch(err){
+    statusEl.textContent = 'Could not load exam window status.';
+  }
+}
+document.getElementById('btn-toggle-window').addEventListener('click', async () => {
+  const statusEl = document.getElementById('ew-status');
+  const currentlyActive = statusEl.dataset.active === '1';
+  const btn = document.getElementById('btn-toggle-window');
+  btn.disabled = true;
+  try{
+    await rpc('admin_toggle_exam_window', { p_admin_id: admin.adminId, p_admin_pass: admin.adminPass, p_active: !currentlyActive });
+    await loadLiveExamWindow();
+    toast(!currentlyActive ? 'Exam window opened.' : 'Exam window closed.', 'ok');
+  }catch(err){
+    toast('Could not toggle exam window: ' + err.message, 'err');
+  }finally{
+    btn.disabled = false;
+  }
+});
+
+async function loadLiveSchedule(){
+  const statusEl = document.getElementById('ew-schedule-status');
+  try{
+    const rows = await restGetAll('exam_configurations', 'select=scheduled_start_at&id=eq.1');
+    const val = rows && rows[0] ? rows[0].scheduled_start_at : null;
+    if (val){
+      const d = new Date(val);
+      statusEl.textContent = `⏰ Scheduled to auto-open at ${d.toLocaleString()}`;
+      document.getElementById('es-schedule-input').value = new Date(d.getTime() - d.getTimezoneOffset()*60000).toISOString().slice(0,16);
+    } else {
+      statusEl.textContent = 'No schedule set — exam window is controlled manually.';
+      document.getElementById('es-schedule-input').value = '';
+    }
+  }catch(err){
+    statusEl.textContent = 'Could not load schedule.';
+  }
+}
+document.getElementById('btn-set-schedule').addEventListener('click', async () => {
+  const val = document.getElementById('es-schedule-input').value;
+  if (!val){ toast('Pick a date & time first.', 'err'); return; }
+  const iso = new Date(val).toISOString();
+  const btn = document.getElementById('btn-set-schedule');
+  btn.disabled = true;
+  try{
+    await rpc('admin_set_exam_schedule', { p_admin_id: admin.adminId, p_admin_pass: admin.adminPass, p_scheduled_start_at: iso });
+    await loadLiveSchedule();
+    toast('Schedule set.', 'ok');
+  }catch(err){
+    toast('Could not set schedule: ' + err.message, 'err');
+  }finally{
+    btn.disabled = false;
+  }
+});
+document.getElementById('btn-clear-schedule').addEventListener('click', async () => {
+  const btn = document.getElementById('btn-clear-schedule');
+  btn.disabled = true;
+  try{
+    await rpc('admin_set_exam_schedule', { p_admin_id: admin.adminId, p_admin_pass: admin.adminPass, p_scheduled_start_at: null });
+    await loadLiveSchedule();
+    toast('Schedule cleared.', 'ok');
+  }catch(err){
+    toast('Could not clear schedule: ' + err.message, 'err');
+  }finally{
+    btn.disabled = false;
+  }
+});
+
+async function loadLiveSessions(forceRender){
+  const listEl = document.getElementById('live-sessions-list');
+  const statBar = document.getElementById('live-stat-bar');
+  try{
+    const rows = await rpc('admin_get_live_sessions', { p_admin_id: admin.adminId, p_admin_pass: admin.adminPass });
+    const signature = JSON.stringify(rows);
+    if (!forceRender && signature === liveSessionsLastSignature) return;
+    liveSessionsLastSignature = signature;
+    if (!rows || !rows.length){
+      statBar.innerHTML = '';
+      listEl.innerHTML = '<div class="empty-state">No students are currently in a live exam session.</div>';
+      return;
+    }
+    statBar.innerHTML = `<div class="stat-box"><div class="sv">${rows.length}</div><div class="sk">Active sessions</div></div>`;
+    listEl.innerHTML = rows.map(r => `
+      <div class="ch-manage-card">
+        <div class="ch-manage-q">${esc(r.name || r.mobile)} <span class="ms">(${esc(r.mobile)})</span></div>
+        <div class="ms" style="margin:4px 0 2px;">${r.current_index != null ? `Q${(r.current_index||0)+1}` : ''} ${r.time_left != null ? `· ${Math.floor(r.time_left/60)}m ${r.time_left%60}s left` : ''}${r.tab_switch_count ? ` · <span style="color:var(--warn);">👁 ${r.tab_switch_count} tab switch${r.tab_switch_count===1?'':'es'}</span>` : ''}</div>
+        <button class="btn btn-danger btn-sm" data-mobile="${esc(r.mobile)}" style="margin-top:6px;">Force release</button>
+      </div>`).join('');
+    listEl.querySelectorAll('button[data-mobile]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        if (!confirm(`Force release ${btn.dataset.mobile}'s session?`)) return;
+        btn.disabled = true;
+        try{
+          await rpc('admin_force_release_session', { p_admin_id: admin.adminId, p_admin_pass: admin.adminPass, p_mobile: btn.dataset.mobile });
+          toast('Session released.', 'ok');
+          loadLiveSessions(true);
+        }catch(err){
+          toast('Could not release session: ' + err.message, 'err');
+          btn.disabled = false;
+        }
+      });
+    });
+  }catch(err){
+    listEl.innerHTML = `<div class="empty-state">Unable to load live sessions.<br><span style="color:#e74c3c; font-size:11px;">${esc(err.message||'')}</span></div>`;
+  }
+}
+
+document.getElementById('btn-relogin').addEventListener('click', async () => {
+  const mobile = prompt('Enter the student\'s mobile number to allow re-login:');
+  if (!mobile) return;
+  try{
+    await rpc('admin_allow_relogin', { p_admin_id: admin.adminId, p_admin_pass: admin.adminPass, p_mobile: mobile.trim() });
+    toast('Re-login allowed for ' + mobile.trim(), 'ok');
+  }catch(err){
+    toast('Could not allow re-login: ' + err.message, 'err');
+  }
+});
+document.getElementById('btn-reset-sessions').addEventListener('click', async () => {
+  const typed = prompt('⚠️ This will reset ALL active live exam sessions for ALL students.\n\nType RESET (in capitals) to confirm.');
+  if (typed !== 'RESET') return;
+  const btn = document.getElementById('btn-reset-sessions');
+  btn.disabled = true; btn.textContent = 'Resetting...';
+  try{
+    await rpc('admin_reset_all_live_sessions', { p_admin_id: admin.adminId, p_admin_pass: admin.adminPass });
+    toast('All live sessions reset.', 'ok');
+    loadLiveSessions(true);
+  }catch(err){
+    toast('Reset failed: ' + err.message, 'err');
+  }finally{
+    btn.disabled = false; btn.textContent = '🗑 Reset all live sessions';
+  }
+});
+
+/* ==========================================================================
+   EXAM SETTINGS
+   ========================================================================== */
+async function openExamSettingsSection(){
+  showView('view-examsettings');
+  const bankInfoEl = document.getElementById('es-bank-info');
+  const sectionsWrap = document.getElementById('es-sections-wrap');
+  document.getElementById('es-error').textContent = '';
+  bankInfoEl.textContent = 'Loading question bank info...';
+  try{
+    const [settings, examRows] = await Promise.all([
+      rpc('admin_get_exam_settings', { p_admin_id: admin.adminId, p_admin_pass: admin.adminPass }),
+      restGetAll('questions', 'select=section')
+    ]);
+    const s = Array.isArray(settings) ? settings[0] : settings;
+    document.getElementById('es-marks-correct').value = s.marks_correct ?? 1;
+    document.getElementById('es-marks-wrong').value = s.marks_wrong ?? 0;
+    document.getElementById('es-duration').value = s.duration_seconds ? Math.round(s.duration_seconds / 60) : '';
+    document.getElementById('es-passing-type').value = s.passing_type || 'Percentage';
+    document.getElementById('es-passing-value').value = s.passing_value ?? 33;
+    document.getElementById('es-visibility').value = s.result_visibility || 'IMMEDIATE (Show Everything)';
+    document.getElementById('es-email-enabled').checked = !!s.email_result_enabled;
+
+    const sectionCounts = {};
+    examRows.forEach(r => {
+      const sec = (r.section || '').trim() || 'Uncategorized';
+      sectionCounts[sec] = (sectionCounts[sec] || 0) + 1;
+    });
+    const sections = Object.keys(sectionCounts).sort();
+    bankInfoEl.textContent = `Live exam bank currently has ${examRows.length} question(s) across ${sections.length} section(s).`;
+
+    let savedAllocations = {};
+    try{ savedAllocations = s.section_allocations ? JSON.parse(s.section_allocations) : {}; }catch(e){ savedAllocations = {}; }
+
+    if (!sections.length){
+      sectionsWrap.innerHTML = '<div class="empty-state">No sections found — add exam questions with a "section" value first.</div>';
+    } else {
+      sectionsWrap.className = '';
+      sectionsWrap.innerHTML = sections.map(sec => `
+        <div class="bx-topic-row">
+          <div class="bx-topic-info">
+            <div class="bx-topic-name">${esc(sec)}</div>
+            <div class="bx-topic-avail">${sectionCounts[sec]} question${sectionCounts[sec]===1?'':'s'} in bank</div>
+          </div>
+          <input type="number" class="bx-topic-count" data-section="${esc(sec)}" min="0" value="${savedAllocations[sec] ?? 0}">
+        </div>`).join('');
+    }
+  }catch(err){
+    bankInfoEl.textContent = 'Could not load exam settings: ' + err.message;
+  }
+}
+
+document.getElementById('btn-es-save').addEventListener('click', async () => {
+  const errEl = document.getElementById('es-error');
+  errEl.textContent = '';
+  const marksCorrect = parseFloat(document.getElementById('es-marks-correct').value);
+  const marksWrong = parseFloat(document.getElementById('es-marks-wrong').value);
+  const durationMinutes = parseFloat(document.getElementById('es-duration').value);
+  const passingType = document.getElementById('es-passing-type').value;
+  const passingValue = parseFloat(document.getElementById('es-passing-value').value);
+  const visibility = document.getElementById('es-visibility').value;
+  const emailEnabled = document.getElementById('es-email-enabled').checked;
+
+  if (isNaN(marksCorrect) || isNaN(marksWrong) || isNaN(durationMinutes) || isNaN(passingValue)){
+    errEl.textContent = 'Please fill in all numeric fields.';
+    return;
+  }
+
+  const sectionAllocations = {};
+  document.querySelectorAll('#es-sections-wrap .bx-topic-count').forEach(inp => {
+    const v = parseInt(inp.value, 10) || 0;
+    if (v > 0) sectionAllocations[inp.dataset.section] = v;
+  });
+
+  const btn = document.getElementById('btn-es-save');
+  btn.disabled = true; btn.textContent = 'Saving...';
+  try{
+    await rpc('admin_save_exam_settings', {
+      p_admin_id: admin.adminId, p_admin_pass: admin.adminPass,
+      p_duration_minutes: durationMinutes, p_marks_correct: marksCorrect, p_marks_wrong: marksWrong,
+      p_passing_type: passingType, p_passing_value: passingValue, p_result_visibility: visibility,
+      p_section_allocations: JSON.stringify(sectionAllocations), p_email_result_enabled: emailEnabled
+    });
+    toast('✅ Exam settings saved.', 'ok');
+  }catch(err){
+    errEl.textContent = 'Save failed: ' + err.message;
+  }finally{
+    btn.disabled = false; btn.textContent = '💾 Apply & sync to cloud';
+  }
+});
+
+/* ==========================================================================
+   PRACTICE SESSIONS (within Results & practice sessions)
+   ========================================================================== */
+async function loadPracticeSessions(){
+  const el = document.getElementById('practice-sessions-list');
+  const statBar = document.getElementById('prac-stat-bar');
+  el.innerHTML = '<div class="spin"></div>';
+  statBar.innerHTML = '';
+  try{
+    const rows = await rpc('admin_get_all_practice_sessions', { p_admin_id: admin.adminId, p_admin_pass: admin.adminPass });
+    if (!rows || !rows.length){
+      el.innerHTML = '<div class="empty-state">No practice sessions recorded yet.</div>';
+      return;
+    }
+    statBar.innerHTML = `<div class="stat-box"><div class="sv">${rows.length}</div><div class="sk">Sessions</div></div>`;
+    el.innerHTML = rows.map(r => {
+      const pct = r.total_q > 0 ? Math.round((r.correct / r.total_q) * 1000) / 10 : 0;
+      return `<div class="ch-manage-card">
+        <div class="ch-manage-q">${esc(r.name || r.mobile)} <span class="ms">(${esc(r.mobile)})</span></div>
+        <div class="ms" style="margin:4px 0 2px;">${esc(r.subject || '')} ${r.topic ? '→ ' + esc(r.topic) : ''} · ${r.correct || 0}/${r.total_q || 0} correct (${pct}%)</div>
+        <div class="ms">${esc((r.created_at || r.session_date || '').toString().slice(0,16).replace('T',' '))}</div>
+      </div>`;
+    }).join('');
+  }catch(err){
+    el.innerHTML = `<div class="empty-state">Unable to load practice sessions.<br><span style="color:#e74c3c; font-size:11px;">${esc(err.message||'')}</span></div>`;
+  }
+}
+document.getElementById('btn-clear-practice').addEventListener('click', async () => {
+  const typed = prompt('⚠️ This will permanently DELETE all practice session records for ALL students.\n\nType DELETE (in capitals) to confirm.');
+  if (typed !== 'DELETE') return;
+  const btn = document.getElementById('btn-clear-practice');
+  btn.disabled = true; btn.textContent = 'Clearing...';
+  try{
+    await rpc('admin_clear_all_practice_sessions', { p_admin_id: admin.adminId, p_admin_pass: admin.adminPass });
+    toast('Practice sessions cleared.', 'ok');
+    loadPracticeSessions();
+  }catch(err){
+    toast('Clear failed: ' + err.message, 'err');
+  }finally{
+    btn.disabled = false; btn.textContent = '🗑 Clear all practice records';
+  }
+});
 </script>
 </body>
 </html>
