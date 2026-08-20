@@ -2834,7 +2834,7 @@ document.getElementById('btn-es-save').addEventListener('click', async () => {
       p_admin_id: admin.adminId, p_admin_pass: admin.adminPass,
       p_duration_minutes: durationMinutes, p_marks_correct: marksCorrect, p_marks_wrong: marksWrong,
       p_passing_type: passingType, p_passing_value: passingValue, p_result_visibility: visibility,
-      p_section_allocations: JSON.stringify(sectionAllocations), p_email_result_enabled: emailEnabled
+      p_section_allocations: sectionAllocations, p_email_result_enabled: emailEnabled
     });
     toast('✅ Exam settings saved.', 'ok');
   }catch(err){
