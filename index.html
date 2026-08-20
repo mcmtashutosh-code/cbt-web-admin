@@ -82,6 +82,27 @@
   .filter-chip{padding:7px 12px; border-radius:20px; font-size:12px; font-weight:600; cursor:pointer; border:1px solid var(--line-soft); color:var(--text-dim); background:var(--field);}
   .filter-chip.sel{background:var(--accent); color:#04182b; border-color:var(--accent);}
 
+  /* ---- Build Live Exam: topic picker rows ---- */
+  .bx-topic-row{display:flex; align-items:center; gap:10px; background:var(--card); border:1px solid var(--line-soft); border-radius:var(--radius-sm); padding:10px 12px; margin-bottom:8px;}
+  .bx-topic-info{flex:1; min-width:0;}
+  .bx-topic-name{font-size:13.5px; font-weight:700; color:var(--text);}
+  .bx-topic-avail{font-size:11.5px; color:var(--text-mute); margin-top:2px;}
+  .bx-topic-count{width:64px; flex:none; text-align:center; padding:9px 6px;}
+
+  /* ---- Build Live Exam: preview/confirm modal ---- */
+  .bx-modal-overlay{display:none; position:fixed; inset:0; background:rgba(3,10,20,.72); z-index:100; align-items:flex-end; justify-content:center;}
+  .bx-modal-overlay.show{display:flex;}
+  .bx-modal-card{background:var(--card); border:1px solid var(--line-soft); border-radius:18px 18px 0 0; width:100%; max-width:560px; max-height:85vh; overflow-y:auto; padding:20px;}
+  @media (min-width:600px){ .bx-modal-overlay{align-items:center;} .bx-modal-card{border-radius:18px;} }
+  .bx-modal-head{display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;}
+  .bx-modal-close{background:var(--field-2); border:none; color:var(--text-dim); width:30px; height:30px; border-radius:8px; cursor:pointer; font-size:14px;}
+  .bx-modal-body{font-size:13px;}
+  .bx-preview-topic{background:var(--field); border:1px solid var(--line-soft); border-radius:var(--radius-sm); padding:10px 12px; margin-bottom:10px;}
+  .bx-preview-topic-head{display:flex; justify-content:space-between; align-items:center; font-weight:700; margin-bottom:6px;}
+  .bx-preview-topic-head .short{color:var(--warn);}
+  .bx-preview-q{font-size:12.5px; color:var(--text-dim); padding:3px 0; border-top:1px solid var(--line-soft);}
+  .bx-preview-q:first-of-type{border-top:none;}
+
   .fb-card{background:var(--card); border:1px solid var(--line-soft); border-radius:var(--radius); padding:14px; margin-bottom:12px;}
   .fb-top{display:flex; align-items:center; gap:6px; flex-wrap:wrap; margin-bottom:8px;}
   .type-pill{font-size:10px; font-weight:700; padding:3px 9px; border-radius:20px; color:#04182b;}
@@ -296,6 +317,11 @@
         <div class="mi">⚙️</div>
         <div class="mt">Exam settings</div>
         <div class="ms">Duration, marks, passing criteria, section-wise question count</div>
+      </div>
+      <div class="menu-card" id="menu-buildexam">
+        <div class="mi">🧩</div>
+        <div class="mt">Build live exam</div>
+        <div class="ms">Pick topics from the practice bank and generate live exam questions instantly</div>
       </div>
     </div>
     <div class="footer"><span class="lock">Secured by CBT Assessment Platform</span> · Cloud-hosted<br>© 2025 Ashutosh Dubey · All Rights Reserved</div>
@@ -928,6 +954,51 @@
     <button class="btn btn-primary" id="btn-es-save" style="margin:14px 0 22px;">💾 Apply & sync to cloud</button>
   </div>
 
+  <!-- ============ BUILD LIVE EXAM FROM PRACTICE BANK ============ -->
+  <div class="view" id="view-buildexam">
+    <div class="section-title">Build live exam</div>
+    <div class="section-sub">Pick topics + how many questions from the practice bank — no more hunting for fresh questions every time. DI/group questions are always kept together.</div>
+
+    <label class="field-label">1 · Live exam mode</label>
+    <div class="filter-row" id="bx-mode">
+      <div class="filter-chip sel" data-m="replace">Replace existing</div>
+      <div class="filter-chip" data-m="append">Add to existing</div>
+    </div>
+    <div class="upload-hint" id="bx-mode-hint" style="margin-bottom:14px;">Replace will delete all current live exam questions first, then load your new selection.</div>
+
+    <label class="field-label">2 · Choose subject</label>
+    <div class="upload-hint" id="bx-subjects-status">Loading subjects from practice bank...</div>
+    <div class="filter-row" id="bx-subjects-list"></div>
+
+    <label class="field-label">3 · Choose topics & counts</label>
+    <div class="upload-hint" id="bx-topics-status" style="display:none;">Select a subject above to see its topics.</div>
+    <div id="bx-topics-list"></div>
+
+    <div class="upload-hint" id="bx-total-summary" style="margin-top:10px; font-weight:700; display:none;"></div>
+
+    <div class="error-text" id="bx-error"></div>
+    <div style="display:flex; gap:10px; margin:14px 0 22px;">
+      <button class="btn btn-ghost" id="btn-bx-preview">👁 Preview selection</button>
+      <button class="btn btn-primary" id="btn-bx-load">🚀 Load into live exam</button>
+    </div>
+  </div>
+
+</div>
+
+<!-- ============ BUILD LIVE EXAM — PREVIEW/CONFIRM MODAL ============ -->
+<div class="bx-modal-overlay" id="bx-modal-overlay">
+  <div class="bx-modal-card">
+    <div class="bx-modal-head">
+      <div class="section-title" style="margin:0;">Preview selection</div>
+      <button class="bx-modal-close" id="bx-modal-close">✕</button>
+    </div>
+    <div class="bx-modal-body" id="bx-modal-body"></div>
+    <div class="error-text" id="bx-modal-error"></div>
+    <div style="display:flex; gap:10px; margin-top:14px;">
+      <button class="btn btn-ghost" id="btn-bx-modal-cancel">Cancel</button>
+      <button class="btn btn-primary" id="btn-bx-modal-confirm">✅ Confirm & load</button>
+    </div>
+  </div>
 </div>
 
 
@@ -1214,6 +1285,7 @@ document.getElementById('menu-settings').addEventListener('click', openSettingsS
 document.getElementById('menu-findfix').addEventListener('click', openFindFixSection);
 document.getElementById('menu-addq').addEventListener('click', openAddQuestionSection);
 document.getElementById('menu-examsettings').addEventListener('click', openExamSettingsSection);
+document.getElementById('menu-buildexam').addEventListener('click', openBuildExamSection);
 document.getElementById('menu-messages').addEventListener('click', openMessagesSection);
 document.getElementById('menu-pendingreg').addEventListener('click', () => {
   showView('view-pendingreg');
@@ -1990,6 +2062,233 @@ function renderExamResults(rows){
     <div class="stat-box"><div class="sv">${failCount}</div><div class="sk">Fail</div></div>`;
   listEl.innerHTML = cards.join('');
 }
+
+/* ==========================================================================
+   BUILD LIVE EXAM FROM PRACTICE BANK
+   ========================================================================== */
+let bxMode = 'replace';        // 'replace' | 'append'
+let bxSubjectMap = {};         // { subject: [{topic, total}] }
+let bxSubjectsSorted = [];     // subject names, sorted, with an overall total tacked on for display
+let bxActiveSubject = null;    // currently selected subject
+let bxCounts = {};             // { topic: count } — persists as you switch between subjects
+let bxLastPreview = null;      // cached RPC result from the last dry-run preview
+
+async function openBuildExamSection(){
+  showView('view-buildexam');
+  document.getElementById('bx-error').textContent = '';
+  document.getElementById('bx-total-summary').style.display = 'none';
+  bxCounts = {};
+  bxActiveSubject = null;
+  const subStatusEl = document.getElementById('bx-subjects-status');
+  const subListEl = document.getElementById('bx-subjects-list');
+  const topicStatusEl = document.getElementById('bx-topics-status');
+  const topicListEl = document.getElementById('bx-topics-list');
+  subStatusEl.textContent = 'Loading subjects from practice bank...';
+  subStatusEl.style.display = 'block';
+  subListEl.innerHTML = '';
+  topicStatusEl.style.display = 'block';
+  topicStatusEl.textContent = 'Select a subject above to see its topics.';
+  topicListEl.innerHTML = '';
+  try{
+    const rows = await restGetAll('practice_questions', 'select=subject,topic');
+    bxSubjectMap = {};
+    rows.forEach(r => {
+      const subj = (r.subject || '').trim() || 'Uncategorized';
+      const t = (r.topic || '').trim();
+      if (!t) return;
+      if (!bxSubjectMap[subj]) bxSubjectMap[subj] = {};
+      bxSubjectMap[subj][t] = (bxSubjectMap[subj][t] || 0) + 1;
+    });
+    bxSubjectsSorted = Object.keys(bxSubjectMap).sort();
+    if (bxSubjectsSorted.length === 0){
+      subStatusEl.textContent = 'No subjects found in the practice bank yet — upload some practice questions first.';
+      return;
+    }
+    subStatusEl.style.display = 'none';
+    renderBxSubjectChips();
+    selectBxSubject(bxSubjectsSorted[0]);
+  }catch(err){
+    subStatusEl.textContent = 'Could not load subjects: ' + err.message;
+  }
+}
+
+function renderBxSubjectChips(){
+  const subListEl = document.getElementById('bx-subjects-list');
+  subListEl.innerHTML = bxSubjectsSorted.map(s => {
+    const topicCount = Object.keys(bxSubjectMap[s]).length;
+    const sel = s === bxActiveSubject ? ' sel' : '';
+    return `<div class="filter-chip${sel}" data-subject="${esc(s)}">${esc(s)} <span style="opacity:.7;">(${topicCount})</span></div>`;
+  }).join('');
+  subListEl.querySelectorAll('.filter-chip').forEach(chip => {
+    chip.addEventListener('click', () => selectBxSubject(chip.dataset.subject));
+  });
+}
+
+function selectBxSubject(subject){
+  bxActiveSubject = subject;
+  document.querySelectorAll('#bx-subjects-list .filter-chip').forEach(c => {
+    c.classList.toggle('sel', c.dataset.subject === subject);
+  });
+  const topicStatusEl = document.getElementById('bx-topics-status');
+  const topicListEl = document.getElementById('bx-topics-list');
+  const topics = Object.keys(bxSubjectMap[subject] || {}).sort();
+  if (topics.length === 0){
+    topicStatusEl.style.display = 'block';
+    topicStatusEl.textContent = 'No topics found for this subject.';
+    topicListEl.innerHTML = '';
+    return;
+  }
+  topicStatusEl.style.display = 'none';
+  topicListEl.innerHTML = topics.map(t => {
+    const total = bxSubjectMap[subject][t];
+    const val = bxCounts[t] || 0;
+    return `
+      <div class="bx-topic-row">
+        <div class="bx-topic-info">
+          <div class="bx-topic-name">${esc(t)}</div>
+          <div class="bx-topic-avail">${total} question${total===1?'':'s'} available</div>
+        </div>
+        <input type="number" class="bx-topic-count" data-topic="${esc(t)}" min="0" max="${total}" value="${val}" inputmode="numeric">
+      </div>
+    `;
+  }).join('');
+  topicListEl.querySelectorAll('.bx-topic-count').forEach(inp => {
+    inp.addEventListener('input', () => {
+      const t = inp.dataset.topic;
+      const v = parseInt(inp.value, 10) || 0;
+      if (v > 0) bxCounts[t] = v; else delete bxCounts[t];
+      updateBxTotalSummary();
+    });
+  });
+  updateBxTotalSummary();
+}
+
+function updateBxTotalSummary(){
+  const sel = collectBxSelections();
+  const summary = document.getElementById('bx-total-summary');
+  const total = sel.reduce((s, x) => s + x.count, 0);
+  if (total > 0){
+    summary.style.display = 'block';
+    summary.textContent = `${total} question${total===1?'':'s'} selected across ${sel.length} topic${sel.length===1?'':'s'} (all subjects).`;
+  } else {
+    summary.style.display = 'none';
+  }
+}
+
+function collectBxSelections(){
+  return Object.keys(bxCounts)
+    .filter(t => bxCounts[t] > 0)
+    .map(t => ({ topic: t, count: bxCounts[t] }));
+}
+
+document.getElementById('bx-mode').addEventListener('click', (e) => {
+  const chip = e.target.closest('.filter-chip');
+  if (!chip) return;
+  document.querySelectorAll('#bx-mode .filter-chip').forEach(c => c.classList.remove('sel'));
+  chip.classList.add('sel');
+  bxMode = chip.dataset.m;
+  document.getElementById('bx-mode-hint').textContent = bxMode === 'replace'
+    ? 'Replace will delete all current live exam questions first, then load your new selection.'
+    : 'Add to existing will keep current live exam questions and add these on top.';
+});
+
+async function runBxPreview(){
+  const errEl = document.getElementById('bx-error');
+  errEl.textContent = '';
+  const selections = collectBxSelections();
+  if (selections.length === 0){
+    errEl.textContent = 'Pick at least one topic and set a count greater than 0.';
+    return null;
+  }
+  try{
+    const result = await rpc('admin_create_live_exam_from_practice', {
+      p_selections: selections,
+      p_replace_existing: bxMode === 'replace',
+      p_dry_run: true
+    });
+    bxLastPreview = result;
+    return result;
+  }catch(err){
+    errEl.textContent = 'Preview failed: ' + err.message;
+    return null;
+  }
+}
+
+function renderBxPreviewModal(result){
+  const body = document.getElementById('bx-modal-body');
+  const modeNote = bxMode === 'replace'
+    ? '⚠️ This will delete all current live exam questions first.'
+    : 'These questions will be added to the current live exam questions.';
+  const totalSelected = result.reduce((s, r) => s + (r.selected_count || 0), 0);
+  const topicsHtml = result.map(r => {
+    const short = r.selected_count < r.requested_count;
+    const preview = Array.isArray(r.preview) ? r.preview : [];
+    const shown = preview.slice(0, 5);
+    const more = preview.length - shown.length;
+    return `<div class="bx-preview-topic">
+      <div class="bx-preview-topic-head">
+        <span>${esc(r.topic)}</span>
+        <span class="${short ? 'short' : ''}">${r.selected_count} / ${r.requested_count}${short ? ' ⚠️ fewer available' : ''}</span>
+      </div>
+      ${shown.map(q => `<div class="bx-preview-q">${esc(q.question)}${q.question && q.question.length >= 60 ? '…' : ''}</div>`).join('')}
+      ${more > 0 ? `<div class="bx-preview-q">…and ${more} more</div>` : ''}
+    </div>`;
+  }).join('');
+  body.innerHTML = `<div class="upload-hint" style="margin-bottom:12px;">${modeNote} Total questions to load: <strong>${totalSelected}</strong>.</div>${topicsHtml}`;
+  document.getElementById('bx-modal-error').textContent = '';
+  document.getElementById('bx-modal-overlay').classList.add('show');
+}
+
+function closeBxModal(){
+  document.getElementById('bx-modal-overlay').classList.remove('show');
+}
+
+document.getElementById('btn-bx-preview').addEventListener('click', async () => {
+  const btn = document.getElementById('btn-bx-preview');
+  btn.disabled = true; btn.textContent = 'Loading preview...';
+  const result = await runBxPreview();
+  btn.disabled = false; btn.textContent = '👁 Preview selection';
+  if (result) renderBxPreviewModal(result);
+});
+
+document.getElementById('btn-bx-load').addEventListener('click', async () => {
+  const btn = document.getElementById('btn-bx-load');
+  btn.disabled = true; btn.textContent = 'Loading preview...';
+  const result = await runBxPreview();
+  btn.disabled = false; btn.textContent = '🚀 Load into live exam';
+  if (result) renderBxPreviewModal(result);
+});
+
+document.getElementById('bx-modal-close').addEventListener('click', closeBxModal);
+document.getElementById('btn-bx-modal-cancel').addEventListener('click', closeBxModal);
+
+document.getElementById('btn-bx-modal-confirm').addEventListener('click', async () => {
+  const confirmBtn = document.getElementById('btn-bx-modal-confirm');
+  const modalErr = document.getElementById('bx-modal-error');
+  modalErr.textContent = '';
+  const selections = collectBxSelections();
+  if (selections.length === 0){
+    modalErr.textContent = 'Selection changed — please preview again.';
+    return;
+  }
+  confirmBtn.disabled = true; confirmBtn.textContent = 'Loading...';
+  try{
+    const result = await rpc('admin_create_live_exam_from_practice', {
+      p_selections: selections,
+      p_replace_existing: bxMode === 'replace',
+      p_dry_run: false
+    });
+    const total = result.reduce((s, r) => s + (r.selected_count || 0), 0);
+    closeBxModal();
+    toast(`✅ ${total} question(s) loaded into the live exam.`, 'ok');
+    document.querySelectorAll('.bx-topic-count').forEach(inp => inp.value = '0');
+    updateBxTotalSummary();
+  }catch(err){
+    modalErr.textContent = 'Failed to load into live exam: ' + err.message;
+  }finally{
+    confirmBtn.disabled = false; confirmBtn.textContent = '✅ Confirm & load';
+  }
+});
 
 /* ==========================================================================
    ⚠️ RESTORED-AS-STUB NOTICE
