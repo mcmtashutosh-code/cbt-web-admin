@@ -2314,9 +2314,224 @@ function openFindFixSection(){
   showView('view-findfix');
 }
 
+/* ==========================================================================
+   ADD QUESTION (single question, with image support)
+   ========================================================================== */
+let aqBank = 'practice';       // 'practice' | 'exam'
+let aqCorrect = 0;             // 0-3
+let aqQuestionFile = null;     // File pending upload
+let aqQuestionReuseUrl = null; // if "reuse last" clicked, use this URL directly
+let aqLastQuestionUrl = null;  // remembered after each successful save
+let aqDiFile = null;
+let aqDiReuseUrl = null;
+let aqLastDiUrl = null;
+let aqOptFiles = { a: null, b: null, c: null, d: null };
+
 function openAddQuestionSection(){
   showView('view-addq');
+  document.getElementById('aq-error').textContent = '';
 }
+
+document.getElementById('aq-bank-row').addEventListener('click', (e) => {
+  const chip = e.target.closest('.filter-chip');
+  if (!chip) return;
+  document.querySelectorAll('#aq-bank-row .filter-chip').forEach(c => c.classList.remove('sel'));
+  chip.classList.add('sel');
+  aqBank = chip.dataset.bank;
+  document.getElementById('aq-section-wrap').style.display = aqBank === 'exam' ? 'block' : 'none';
+});
+
+document.getElementById('aq-correct-row').addEventListener('click', (e) => {
+  const chip = e.target.closest('.filter-chip');
+  if (!chip) return;
+  document.querySelectorAll('#aq-correct-row .filter-chip').forEach(c => c.classList.remove('sel'));
+  chip.classList.add('sel');
+  aqCorrect = parseInt(chip.dataset.c, 10);
+});
+
+async function uploadQuestionImage(file, prefix){
+  const ext = (file.name.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '') || 'jpg';
+  const path = `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}.${ext}`;
+  const res = await fetch(`${SUPABASE_URL}/storage/v1/object/question-images/${path}`, {
+    method: 'POST',
+    headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}`, 'Content-Type': file.type || 'image/jpeg' },
+    body: file
+  });
+  if (!res.ok){
+    let detail = `Image upload failed (HTTP ${res.status})`;
+    try{ const j = await res.json(); detail = j.message || detail; }catch(e){ /* not json */ }
+    throw new Error(detail);
+  }
+  return `${SUPABASE_URL}/storage/v1/object/public/question-images/${path}`;
+}
+
+/* ---- Question image ---- */
+document.getElementById('aq-qimg-file').addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  if (file.size > 5 * 1024 * 1024){ toast('Image must be under 5MB.', 'err'); e.target.value = ''; return; }
+  aqQuestionFile = file;
+  aqQuestionReuseUrl = null;
+  const reader = new FileReader();
+  reader.onload = () => {
+    document.getElementById('aq-qimg-preview').src = reader.result;
+    document.getElementById('aq-qimg-preview-wrap').style.display = 'block';
+  };
+  reader.readAsDataURL(file);
+});
+document.getElementById('btn-aq-qimg-remove').addEventListener('click', () => {
+  aqQuestionFile = null; aqQuestionReuseUrl = null;
+  document.getElementById('aq-qimg-file').value = '';
+  document.getElementById('aq-qimg-preview-wrap').style.display = 'none';
+});
+document.getElementById('btn-aq-reuse-qimg').addEventListener('click', () => {
+  if (!aqLastQuestionUrl){ toast('No previous question image to reuse yet.', 'err'); return; }
+  aqQuestionFile = null; aqQuestionReuseUrl = aqLastQuestionUrl;
+  document.getElementById('aq-qimg-file').value = '';
+  document.getElementById('aq-qimg-preview').src = aqLastQuestionUrl;
+  document.getElementById('aq-qimg-preview-wrap').style.display = 'block';
+});
+
+/* ---- DI shared image ---- */
+document.getElementById('aq-di-image-file').addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  if (file.size > 5 * 1024 * 1024){ toast('Image must be under 5MB.', 'err'); e.target.value = ''; return; }
+  aqDiFile = file;
+  aqDiReuseUrl = null;
+  const reader = new FileReader();
+  reader.onload = () => {
+    document.getElementById('aq-di-image-preview').src = reader.result;
+    document.getElementById('aq-di-image-preview-wrap').style.display = 'block';
+  };
+  reader.readAsDataURL(file);
+});
+document.getElementById('btn-aq-di-image-remove').addEventListener('click', () => {
+  aqDiFile = null; aqDiReuseUrl = null;
+  document.getElementById('aq-di-image-file').value = '';
+  document.getElementById('aq-di-image-preview-wrap').style.display = 'none';
+});
+document.getElementById('btn-aq-reuse-diimg').addEventListener('click', () => {
+  if (!aqLastDiUrl){ toast('No previous DI image to reuse yet.', 'err'); return; }
+  aqDiFile = null; aqDiReuseUrl = aqLastDiUrl;
+  document.getElementById('aq-di-image-file').value = '';
+  document.getElementById('aq-di-image-preview').src = aqLastDiUrl;
+  document.getElementById('aq-di-image-preview-wrap').style.display = 'block';
+});
+
+/* ---- Option A-D images ---- */
+['a','b','c','d'].forEach(letter => {
+  document.getElementById(`aq-optimg-${letter}-file`).addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024){ toast('Image must be under 5MB.', 'err'); e.target.value = ''; return; }
+    aqOptFiles[letter] = file;
+    const reader = new FileReader();
+    reader.onload = () => {
+      document.getElementById(`aq-optimg-${letter}-preview`).src = reader.result;
+      document.getElementById(`aq-optimg-${letter}-preview-wrap`).style.display = 'block';
+    };
+    reader.readAsDataURL(file);
+  });
+  document.getElementById(`btn-aq-optimg-${letter}-remove`).addEventListener('click', () => {
+    aqOptFiles[letter] = null;
+    document.getElementById(`aq-optimg-${letter}-file`).value = '';
+    document.getElementById(`aq-optimg-${letter}-preview-wrap`).style.display = 'none';
+  });
+});
+
+function resetAddQuestionForm(){
+  document.getElementById('aq-question').value = '';
+  ['a','b','c','d'].forEach(letter => {
+    document.getElementById(`aq-opt-${letter}`).value = '';
+    aqOptFiles[letter] = null;
+    document.getElementById(`aq-optimg-${letter}-file`).value = '';
+    document.getElementById(`aq-optimg-${letter}-preview-wrap`).style.display = 'none';
+  });
+  document.getElementById('aq-di-group').value = '';
+  document.getElementById('aq-di-content').value = '';
+  document.getElementById('aq-section').value = '';
+  document.getElementById('aq-difficulty').value = '';
+  aqQuestionFile = null; aqQuestionReuseUrl = null;
+  document.getElementById('aq-qimg-file').value = '';
+  document.getElementById('aq-qimg-preview-wrap').style.display = 'none';
+  aqDiFile = null; aqDiReuseUrl = null;
+  document.getElementById('aq-di-image-file').value = '';
+  document.getElementById('aq-di-image-preview-wrap').style.display = 'none';
+  // Subject/topic and correct-answer chip are intentionally kept as-is,
+  // since consecutive questions are usually from the same subject/topic/DI set.
+}
+
+document.getElementById('btn-aq-save').addEventListener('click', async () => {
+  const errEl = document.getElementById('aq-error');
+  errEl.textContent = '';
+
+  const question = document.getElementById('aq-question').value.trim();
+  const optText = {
+    a: document.getElementById('aq-opt-a').value.trim(),
+    b: document.getElementById('aq-opt-b').value.trim(),
+    c: document.getElementById('aq-opt-c').value.trim(),
+    d: document.getElementById('aq-opt-d').value.trim()
+  };
+  const subject = document.getElementById('aq-subject').value.trim();
+  const topic = document.getElementById('aq-topic').value.trim();
+  const difficulty = document.getElementById('aq-difficulty').value.trim();
+  const section = document.getElementById('aq-section').value.trim();
+  const diGroup = document.getElementById('aq-di-group').value.trim();
+  const diContent = document.getElementById('aq-di-content').value.trim();
+
+  if (!question && !aqQuestionFile && !aqQuestionReuseUrl){
+    errEl.textContent = 'Add question text or a question image.'; return;
+  }
+  for (const letter of ['a','b','c','d']){
+    if (!optText[letter] && !aqOptFiles[letter]){
+      errEl.textContent = `Option ${letter.toUpperCase()} needs text or an image.`; return;
+    }
+  }
+  if (!subject || !topic){ errEl.textContent = 'Subject and topic are required.'; return; }
+  if (aqBank === 'exam' && !section){ errEl.textContent = 'Section is required for exam questions.'; return; }
+
+  const btn = document.getElementById('btn-aq-save');
+  btn.disabled = true; btn.textContent = 'Saving...';
+  try{
+    const questionImageUrl = aqQuestionReuseUrl || (aqQuestionFile ? await uploadQuestionImage(aqQuestionFile, 'q') : null);
+    const diImageUrl = aqDiReuseUrl || (aqDiFile ? await uploadQuestionImage(aqDiFile, 'di') : null);
+    const optUrls = {};
+    for (const letter of ['a','b','c','d']){
+      optUrls[letter] = aqOptFiles[letter] ? await uploadQuestionImage(aqOptFiles[letter], `opt${letter}`) : null;
+    }
+
+    if (aqBank === 'practice'){
+      await rpc('admin_add_practice_question', {
+        p_admin_id: admin.adminId, p_admin_pass: admin.adminPass,
+        p_question: question, p_option1: optText.a, p_option2: optText.b, p_option3: optText.c, p_option4: optText.d,
+        p_correct_index: aqCorrect, p_subject: subject, p_topic: topic, p_difficulty: difficulty, p_solution: '',
+        p_question_image_url: questionImageUrl, p_option_a_image_url: optUrls.a, p_option_b_image_url: optUrls.b,
+        p_option_c_image_url: optUrls.c, p_option_d_image_url: optUrls.d,
+        p_di_content: diContent || null, p_di_group: diGroup || null, p_di_image: diImageUrl
+      });
+    } else {
+      await rpc('admin_add_exam_question', {
+        p_admin_id: admin.adminId, p_admin_pass: admin.adminPass,
+        p_question: question, p_option1: optText.a, p_option2: optText.b, p_option3: optText.c, p_option4: optText.d,
+        p_correct_index: aqCorrect, p_section: section, p_subject: subject, p_topic: topic, p_difficulty: difficulty,
+        p_question_image_url: questionImageUrl, p_option_a_image_url: optUrls.a, p_option_b_image_url: optUrls.b,
+        p_option_c_image_url: optUrls.c, p_option_d_image_url: optUrls.d,
+        p_di_content: diContent || null, p_di_group: diGroup || null, p_di_image: diImageUrl
+      });
+    }
+
+    if (questionImageUrl) aqLastQuestionUrl = questionImageUrl;
+    if (diImageUrl) aqLastDiUrl = diImageUrl;
+    toast(`✅ Question added to ${aqBank === 'practice' ? 'practice bank' : 'live exam bank'}.`, 'ok');
+    resetAddQuestionForm();
+    document.getElementById('aq-question').focus();
+  }catch(err){
+    errEl.textContent = 'Save failed: ' + err.message;
+  }finally{
+    btn.disabled = false; btn.textContent = '✅ Add question';
+  }
+});
 
 function openMessagesSection(){
   showView('view-messages');
