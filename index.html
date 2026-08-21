@@ -2308,11 +2308,275 @@ document.getElementById('btn-bx-modal-confirm').addEventListener('click', async 
 
 function openSettingsSection(){
   showView('view-settings');
+  document.getElementById('set-current-id').value = admin.adminId;
+  document.getElementById('set-new-id').value = admin.adminId;
+  document.getElementById('set-new-pass').value = '';
+  document.getElementById('set-confirm-pass').value = '';
+  document.getElementById('set-cred-error').textContent = '';
 }
+
+document.getElementById('set-pw-toggle').addEventListener('click', (e) => {
+  const inputs = [document.getElementById('set-new-pass'), document.getElementById('set-confirm-pass')];
+  const showing = inputs[0].type === 'text';
+  inputs.forEach(i => i.type = showing ? 'password' : 'text');
+  e.target.textContent = showing ? 'SHOW' : 'HIDE';
+});
+
+document.getElementById('btn-update-creds').addEventListener('click', async () => {
+  const errEl = document.getElementById('set-cred-error');
+  errEl.textContent = '';
+  const newId = document.getElementById('set-new-id').value.trim();
+  const newPass = document.getElementById('set-new-pass').value;
+  const confirmPass = document.getElementById('set-confirm-pass').value;
+
+  if (!newId){ errEl.textContent = 'Admin ID cannot be blank.'; return; }
+  if (newPass || confirmPass){
+    if (newPass !== confirmPass){ errEl.textContent = 'Passwords do not match.'; return; }
+    if (newPass.length < 3){ errEl.textContent = 'Password is too short.'; return; }
+  }
+  if (newId === admin.adminId && !newPass){ errEl.textContent = 'Change the Admin ID or enter a new password.'; return; }
+
+  const typed = prompt(`⚠️ You will be logged out and need to sign in again with the new credentials.\n\nType YES to confirm.`);
+  if (typed !== 'YES') return;
+
+  const btn = document.getElementById('btn-update-creds');
+  btn.disabled = true; btn.textContent = 'Updating...';
+  try{
+    await rpc('admin_update_credentials', {
+      p_admin_id: admin.adminId, p_admin_pass: admin.adminPass,
+      p_new_admin_id: newId, p_new_admin_pass: newPass || admin.adminPass
+    });
+    toast('✅ Credentials updated. Please log in again.', 'ok');
+    setTimeout(() => { window.location.reload(); }, 1200);
+  }catch(err){
+    errEl.textContent = 'Update failed: ' + err.message;
+    btn.disabled = false; btn.textContent = '🔑 Update credentials';
+  }
+});
 
 function openFindFixSection(){
   showView('view-findfix');
+  document.getElementById('ff-id-input').value = '';
+  document.getElementById('ff-form-wrap').style.display = 'none';
+  document.getElementById('ff-error').textContent = '';
 }
+
+let ffBank = 'practice';
+let ffCurrentId = null;
+let ffCorrect = 0;
+let ffQuestionFile = null, ffQuestionExistingUrl = null;
+let ffDiFile = null, ffDiExistingUrl = null;
+let ffOptFiles = { a: null, b: null, c: null, d: null };
+let ffOptExistingUrls = { a: null, b: null, c: null, d: null };
+
+document.getElementById('ff-bank-row').addEventListener('click', (e) => {
+  const chip = e.target.closest('.filter-chip');
+  if (!chip) return;
+  document.querySelectorAll('#ff-bank-row .filter-chip').forEach(c => c.classList.remove('sel'));
+  chip.classList.add('sel');
+  ffBank = chip.dataset.bank;
+  document.getElementById('ff-section-wrap').style.display = ffBank === 'exam' ? 'block' : 'none';
+  document.getElementById('ff-form-wrap').style.display = 'none';
+});
+
+document.getElementById('ff-correct-row').addEventListener('click', (e) => {
+  const chip = e.target.closest('.filter-chip');
+  if (!chip) return;
+  document.querySelectorAll('#ff-correct-row .filter-chip').forEach(c => c.classList.remove('sel'));
+  chip.classList.add('sel');
+  ffCorrect = parseInt(chip.dataset.c, 10);
+});
+
+document.getElementById('btn-ff-toggle-optimg').addEventListener('click', () => {
+  const wrap = document.getElementById('ff-optimg-wrap');
+  wrap.style.display = wrap.style.display === 'none' ? 'block' : 'none';
+});
+
+function ffSetPreview(prefix, url){
+  const wrap = document.getElementById(`${prefix}-preview-wrap`);
+  const img = document.getElementById(`${prefix}-preview`);
+  if (url){ img.src = url; wrap.style.display = 'block'; }
+  else { img.src = ''; wrap.style.display = 'none'; }
+}
+
+document.getElementById('btn-ff-fetch').addEventListener('click', async () => {
+  const errEl = document.getElementById('ff-error');
+  errEl.textContent = '';
+  const idVal = document.getElementById('ff-id-input').value.trim();
+  if (!idVal){ errEl.textContent = 'Enter a question ID.'; return; }
+  const btn = document.getElementById('btn-ff-fetch');
+  btn.disabled = true; btn.textContent = 'Finding...';
+  try{
+    const fn = ffBank === 'practice' ? 'admin_get_practice_question' : 'admin_get_exam_question';
+    const result = await rpc(fn, { p_admin_id: admin.adminId, p_admin_pass: admin.adminPass, p_id: parseInt(idVal, 10) });
+    const q = Array.isArray(result) ? result[0] : result;
+    if (!q || !q.id){ errEl.textContent = `No ${ffBank} question found with ID ${idVal}.`; document.getElementById('ff-form-wrap').style.display = 'none'; return; }
+
+    ffCurrentId = q.id;
+    document.getElementById('ff-found-tag').textContent = `Editing ${ffBank} question #${q.id}`;
+    document.getElementById('ff-question').value = q.question || '';
+    document.getElementById('ff-opt-a').value = q.option1 || '';
+    document.getElementById('ff-opt-b').value = q.option2 || '';
+    document.getElementById('ff-opt-c').value = q.option3 || '';
+    document.getElementById('ff-opt-d').value = q.option4 || '';
+    document.getElementById('ff-subject').value = q.subject || '';
+    document.getElementById('ff-topic').value = q.topic || '';
+    document.getElementById('ff-difficulty').value = q.difficulty || '';
+    document.getElementById('ff-section').value = q.section || '';
+    document.getElementById('ff-di-group').value = q.di_group || '';
+    document.getElementById('ff-di-content').value = q.di_content || '';
+
+    ffCorrect = q.correct_index || 0;
+    document.querySelectorAll('#ff-correct-row .filter-chip').forEach(c => c.classList.toggle('sel', parseInt(c.dataset.c,10) === ffCorrect));
+
+    ffQuestionFile = null; ffQuestionExistingUrl = q.question_image_url || null;
+    document.getElementById('ff-qimg-file').value = '';
+    ffSetPreview('ff-qimg', ffQuestionExistingUrl);
+
+    ffDiFile = null; ffDiExistingUrl = q.di_image || null;
+    document.getElementById('ff-di-image-file').value = '';
+    ffSetPreview('ff-di-image', ffDiExistingUrl);
+
+    ['a','b','c','d'].forEach(letter => {
+      ffOptFiles[letter] = null;
+      const key = `option_${letter}_image_url`;
+      ffOptExistingUrls[letter] = q[key] || null;
+      document.getElementById(`ff-optimg-${letter}-file`).value = '';
+      ffSetPreview(`ff-optimg-${letter}`, ffOptExistingUrls[letter]);
+    });
+
+    document.getElementById('ff-form-wrap').style.display = 'block';
+  }catch(err){
+    errEl.textContent = 'Lookup failed: ' + err.message;
+  }finally{
+    btn.disabled = false; btn.textContent = '🔍 Find';
+  }
+});
+
+document.getElementById('btn-ff-qimg-remove').addEventListener('click', () => {
+  ffQuestionFile = null; ffQuestionExistingUrl = null;
+  document.getElementById('ff-qimg-file').value = '';
+  ffSetPreview('ff-qimg', null);
+});
+document.getElementById('ff-qimg-file').addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  if (file.size > 5 * 1024 * 1024){ toast('Image must be under 5MB.', 'err'); e.target.value = ''; return; }
+  ffQuestionFile = file;
+  const reader = new FileReader();
+  reader.onload = () => ffSetPreview('ff-qimg', reader.result);
+  reader.readAsDataURL(file);
+});
+
+document.getElementById('btn-ff-di-image-remove').addEventListener('click', () => {
+  ffDiFile = null; ffDiExistingUrl = null;
+  document.getElementById('ff-di-image-file').value = '';
+  ffSetPreview('ff-di-image', null);
+});
+document.getElementById('ff-di-image-file').addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  if (file.size > 5 * 1024 * 1024){ toast('Image must be under 5MB.', 'err'); e.target.value = ''; return; }
+  ffDiFile = file;
+  const reader = new FileReader();
+  reader.onload = () => ffSetPreview('ff-di-image', reader.result);
+  reader.readAsDataURL(file);
+});
+
+['a','b','c','d'].forEach(letter => {
+  document.getElementById(`btn-ff-optimg-${letter}-remove`).addEventListener('click', () => {
+    ffOptFiles[letter] = null; ffOptExistingUrls[letter] = null;
+    document.getElementById(`ff-optimg-${letter}-file`).value = '';
+    ffSetPreview(`ff-optimg-${letter}`, null);
+  });
+  document.getElementById(`ff-optimg-${letter}-file`).addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024){ toast('Image must be under 5MB.', 'err'); e.target.value = ''; return; }
+    ffOptFiles[letter] = file;
+    const reader = new FileReader();
+    reader.onload = () => ffSetPreview(`ff-optimg-${letter}`, reader.result);
+    reader.readAsDataURL(file);
+  });
+});
+
+document.getElementById('btn-ff-save').addEventListener('click', async () => {
+  const errEl = document.getElementById('ff-save-error');
+  errEl.textContent = '';
+  if (!ffCurrentId){ errEl.textContent = 'Find a question first.'; return; }
+
+  const question = document.getElementById('ff-question').value.trim();
+  const opt1 = document.getElementById('ff-opt-a').value.trim();
+  const opt2 = document.getElementById('ff-opt-b').value.trim();
+  const opt3 = document.getElementById('ff-opt-c').value.trim();
+  const opt4 = document.getElementById('ff-opt-d').value.trim();
+  const subject = document.getElementById('ff-subject').value.trim();
+  const topic = document.getElementById('ff-topic').value.trim();
+  const difficulty = document.getElementById('ff-difficulty').value.trim();
+  const section = document.getElementById('ff-section').value.trim();
+  const diGroup = document.getElementById('ff-di-group').value.trim();
+  const diContent = document.getElementById('ff-di-content').value.trim();
+
+  if (!question || !opt1 || !opt2 || !opt3 || !opt4){ errEl.textContent = 'Question and all 4 options are required.'; return; }
+  if (!subject || !topic){ errEl.textContent = 'Subject and topic are required.'; return; }
+  if (ffBank === 'exam' && !section){ errEl.textContent = 'Section is required for exam questions.'; return; }
+
+  const btn = document.getElementById('btn-ff-save');
+  btn.disabled = true; btn.textContent = 'Saving...';
+  try{
+    const questionImageUrl = ffQuestionFile ? await uploadQuestionImage(ffQuestionFile, 'q') : ffQuestionExistingUrl;
+    const diImageUrl = ffDiFile ? await uploadQuestionImage(ffDiFile, 'di') : ffDiExistingUrl;
+    const optUrls = {};
+    for (const letter of ['a','b','c','d']){
+      optUrls[letter] = ffOptFiles[letter] ? await uploadQuestionImage(ffOptFiles[letter], `opt${letter}`) : ffOptExistingUrls[letter];
+    }
+
+    if (ffBank === 'practice'){
+      await rpc('admin_update_practice_question', {
+        p_admin_id: admin.adminId, p_admin_pass: admin.adminPass, p_id: ffCurrentId,
+        p_question: question, p_option1: opt1, p_option2: opt2, p_option3: opt3, p_option4: opt4,
+        p_correct_index: ffCorrect, p_subject: subject, p_topic: topic, p_difficulty: difficulty,
+        p_question_image_url: questionImageUrl, p_option_a_image_url: optUrls.a, p_option_b_image_url: optUrls.b,
+        p_option_c_image_url: optUrls.c, p_option_d_image_url: optUrls.d,
+        p_di_content: diContent || null, p_di_group: diGroup || null, p_di_image: diImageUrl
+      });
+    } else {
+      await rpc('admin_update_exam_question', {
+        p_admin_id: admin.adminId, p_admin_pass: admin.adminPass, p_id: ffCurrentId,
+        p_question: question, p_option1: opt1, p_option2: opt2, p_option3: opt3, p_option4: opt4,
+        p_correct_index: ffCorrect, p_section: section, p_subject: subject, p_topic: topic, p_difficulty: difficulty,
+        p_question_image_url: questionImageUrl, p_option_a_image_url: optUrls.a, p_option_b_image_url: optUrls.b,
+        p_option_c_image_url: optUrls.c, p_option_d_image_url: optUrls.d,
+        p_di_content: diContent || null, p_di_group: diGroup || null, p_di_image: diImageUrl
+      });
+    }
+    toast(`✅ Question #${ffCurrentId} updated.`, 'ok');
+  }catch(err){
+    errEl.textContent = 'Save failed: ' + err.message;
+  }finally{
+    btn.disabled = false; btn.textContent = '💾 Save changes';
+  }
+});
+
+document.getElementById('btn-ff-delete').addEventListener('click', async () => {
+  if (!ffCurrentId){ return; }
+  const typed = prompt(`⚠️ This will permanently DELETE ${ffBank} question #${ffCurrentId}.\n\nType DELETE (in capitals) to confirm.`);
+  if (typed !== 'DELETE') return;
+  const btn = document.getElementById('btn-ff-delete');
+  btn.disabled = true; btn.textContent = 'Deleting...';
+  try{
+    const fn = ffBank === 'practice' ? 'admin_delete_practice_question' : 'admin_delete_exam_question';
+    await rpc(fn, { p_admin_id: admin.adminId, p_admin_pass: admin.adminPass, p_id: ffCurrentId });
+    toast(`Question #${ffCurrentId} deleted.`, 'ok');
+    document.getElementById('ff-form-wrap').style.display = 'none';
+    document.getElementById('ff-id-input').value = '';
+    ffCurrentId = null;
+  }catch(err){
+    toast('Delete failed: ' + err.message, 'err');
+  }finally{
+    btn.disabled = false; btn.textContent = '🗑 Delete question';
+  }
+});
 
 /* ==========================================================================
    ADD QUESTION (single question, with image support)
@@ -2535,9 +2799,197 @@ document.getElementById('btn-aq-save').addEventListener('click', async () => {
 
 function openMessagesSection(){
   showView('view-messages');
-  const el = document.getElementById('admin-messages-list');
-  if (el) el.innerHTML = '<div class="empty-state">⚠️ Coming in the next phase.</div>';
+  setMessagesTab('notice');
+  loadNotices();
+  loadMessageThreads();
 }
+
+function setMessagesTab(tab){
+  document.getElementById('mtab-notice').classList.toggle('active', tab === 'notice');
+  document.getElementById('mtab-chat').classList.toggle('active', tab === 'chat');
+  document.getElementById('mpanel-notice').classList.toggle('active', tab === 'notice');
+  document.getElementById('mpanel-chat').classList.toggle('active', tab === 'chat');
+}
+document.getElementById('mtab-notice').addEventListener('click', () => setMessagesTab('notice'));
+document.getElementById('mtab-chat').addEventListener('click', () => setMessagesTab('chat'));
+
+/* ---- Notices ---- */
+async function loadNotices(){
+  const el = document.getElementById('ntc-list');
+  el.innerHTML = '<div class="spin"></div>';
+  try{
+    const rows = await rpc('admin_get_notices', { p_admin_id: admin.adminId, p_admin_pass: admin.adminPass });
+    if (!rows || !rows.length){ el.innerHTML = '<div class="empty-state">No notices posted yet.</div>'; return; }
+    el.innerHTML = rows.map(n => `
+      <div class="policy" style="margin-bottom:10px;">
+        <div class="b">${esc(n.message || '')}</div>
+        <div class="ms" style="margin-top:6px;">${n.is_active ? '🟢 Active' : '⚪ Inactive'} · ${esc((n.created_at||'').toString().slice(0,16).replace('T',' '))}</div>
+        <div style="display:flex; gap:8px; margin-top:8px;">
+          <button class="btn btn-sm" data-act="toggle" data-id="${n.id}" data-active="${n.is_active ? '1' : '0'}">${n.is_active ? 'Deactivate' : 'Activate'}</button>
+          <button class="btn btn-danger btn-sm" data-act="delete" data-id="${n.id}">Delete</button>
+        </div>
+      </div>`).join('');
+    el.querySelectorAll('button[data-act]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const id = parseInt(btn.dataset.id, 10);
+        btn.disabled = true;
+        try{
+          if (btn.dataset.act === 'toggle'){
+            await rpc('admin_set_notice_active', { p_admin_id: admin.adminId, p_admin_pass: admin.adminPass, p_notice_id: id, p_is_active: btn.dataset.active !== '1' });
+          } else {
+            if (!confirm('Delete this notice?')) { btn.disabled = false; return; }
+            await rpc('admin_delete_notice', { p_admin_id: admin.adminId, p_admin_pass: admin.adminPass, p_notice_id: id });
+          }
+          loadNotices();
+        }catch(err){
+          toast('Action failed: ' + err.message, 'err');
+          btn.disabled = false;
+        }
+      });
+    });
+  }catch(err){
+    el.innerHTML = `<div class="empty-state">Unable to load notices.<br><span style="color:#e74c3c; font-size:11px;">${esc(err.message||'')}</span></div>`;
+  }
+}
+document.getElementById('btn-post-notice').addEventListener('click', async () => {
+  const errEl = document.getElementById('ntc-err');
+  errEl.textContent = '';
+  const msg = document.getElementById('ntc-message').value.trim();
+  if (!msg){ errEl.textContent = 'Enter a notice message.'; return; }
+  const btn = document.getElementById('btn-post-notice');
+  btn.disabled = true; btn.textContent = 'Posting...';
+  try{
+    await rpc('admin_post_notice', { p_admin_id: admin.adminId, p_admin_pass: admin.adminPass, p_message: msg });
+    document.getElementById('ntc-message').value = '';
+    toast('✅ Notice posted.', 'ok');
+    loadNotices();
+  }catch(err){
+    errEl.textContent = 'Post failed: ' + err.message;
+  }finally{
+    btn.disabled = false; btn.textContent = '📢 Post notice';
+  }
+});
+
+/* ---- Student chat ---- */
+let msgCurrentMobile = null;
+let msgSearchTimer = null;
+
+document.getElementById('msg-search').addEventListener('input', (e) => {
+  clearTimeout(msgSearchTimer);
+  const q = e.target.value.trim();
+  const resultsEl = document.getElementById('msg-search-results');
+  if (!q){ resultsEl.innerHTML = ''; return; }
+  msgSearchTimer = setTimeout(async () => {
+    try{
+      const rows = await rpc('admin_search_students', { p_admin_id: admin.adminId, p_admin_pass: admin.adminPass, p_query: q });
+      if (!rows || !rows.length){ resultsEl.innerHTML = '<div class="empty-state">No students found.</div>'; return; }
+      resultsEl.innerHTML = rows.slice(0, 8).map(s => `
+        <div class="policy" data-mobile="${esc(s.mobile)}" style="cursor:pointer; margin-top:6px;">
+          <div class="t">${esc(s.name || s.mobile)}</div>
+          <div class="b">${esc(s.mobile)}</div>
+        </div>`).join('');
+      resultsEl.querySelectorAll('[data-mobile]').forEach(el => {
+        el.addEventListener('click', () => openMessageThread(el.dataset.mobile, el.querySelector('.t').textContent));
+      });
+    }catch(err){
+      resultsEl.innerHTML = '';
+    }
+  }, 300);
+});
+
+async function loadMessageThreads(){
+  const el = document.getElementById('msg-threads-list');
+  el.innerHTML = '<div class="spin"></div>';
+  try{
+    const rows = await rpc('admin_get_threads', { p_admin_id: admin.adminId, p_admin_pass: admin.adminPass });
+    if (!rows || !rows.length){ el.innerHTML = '<div class="empty-state">No conversations yet.</div>'; return; }
+    el.innerHTML = rows.map(t => `
+      <div class="policy" data-mobile="${esc(t.mobile)}" style="cursor:pointer; margin-top:6px;">
+        <div class="t">${esc(t.name || t.mobile)} ${t.status === 'open' ? '🟢' : '⚪'}</div>
+        <div class="b">${esc((t.last_message || t.message || '').toString().slice(0,80))}</div>
+        <div class="ms" style="margin-top:4px;">${esc((t.updated_at || t.created_at || '').toString().slice(0,16).replace('T',' '))}</div>
+      </div>`).join('');
+    el.querySelectorAll('[data-mobile]').forEach(row => {
+      row.addEventListener('click', () => openMessageThread(row.dataset.mobile, row.querySelector('.t').textContent));
+    });
+  }catch(err){
+    el.innerHTML = `<div class="empty-state">Unable to load conversations.<br><span style="color:#e74c3c; font-size:11px;">${esc(err.message||'')}</span></div>`;
+  }
+}
+
+async function openMessageThread(mobile, displayName){
+  msgCurrentMobile = mobile;
+  document.getElementById('msg-thread-wrap').style.display = 'block';
+  document.getElementById('msg-thread-name').textContent = displayName || mobile;
+  document.getElementById('msg-thread-status').textContent = 'Loading conversation...';
+  document.getElementById('msg-thread-list').innerHTML = '<div class="spin"></div>';
+  document.getElementById('msg-err').textContent = '';
+  try{
+    const rows = await rpc('admin_get_thread_messages', { p_admin_id: admin.adminId, p_admin_pass: admin.adminPass, p_mobile: mobile });
+    document.getElementById('msg-thread-status').textContent = `${rows ? rows.length : 0} message(s)`;
+    const listEl = document.getElementById('msg-thread-list');
+    if (!rows || !rows.length){
+      listEl.innerHTML = '<div class="empty-state">No messages yet — start the conversation below.</div>';
+      return;
+    }
+    listEl.innerHTML = rows.map(m => {
+      const fromAdmin = m.is_admin || m.sender === 'admin';
+      return `<div style="align-self:${fromAdmin ? 'flex-end' : 'flex-start'}; background:${fromAdmin ? 'var(--accent)' : 'var(--field)'}; color:${fromAdmin ? '#04182b' : 'var(--text)'}; padding:8px 12px; border-radius:12px; max-width:80%;">
+        <div style="font-size:13px;">${esc(m.message || '')}</div>
+        <div style="font-size:10px; opacity:.7; margin-top:2px;">${esc((m.created_at||'').toString().slice(0,16).replace('T',' '))}</div>
+      </div>`;
+    }).join('');
+    listEl.scrollTop = listEl.scrollHeight;
+  }catch(err){
+    document.getElementById('msg-thread-status').textContent = 'Could not load messages.';
+    document.getElementById('msg-err').textContent = err.message;
+  }
+}
+
+document.getElementById('btn-msg-send').addEventListener('click', async () => {
+  const errEl = document.getElementById('msg-err');
+  errEl.textContent = '';
+  const text = document.getElementById('msg-reply-text').value.trim();
+  if (!msgCurrentMobile){ errEl.textContent = 'Open a conversation first.'; return; }
+  if (!text){ errEl.textContent = 'Type a message.'; return; }
+  const btn = document.getElementById('btn-msg-send');
+  btn.disabled = true;
+  try{
+    await rpc('admin_send_message', { p_admin_id: admin.adminId, p_admin_pass: admin.adminPass, p_mobile: msgCurrentMobile, p_message: text });
+    document.getElementById('msg-reply-text').value = '';
+    await openMessageThread(msgCurrentMobile, document.getElementById('msg-thread-name').textContent);
+    loadMessageThreads();
+  }catch(err){
+    errEl.textContent = 'Send failed: ' + err.message;
+  }finally{
+    btn.disabled = false;
+  }
+});
+document.getElementById('btn-msg-close').addEventListener('click', async () => {
+  if (!msgCurrentMobile) return;
+  try{
+    await rpc('admin_close_thread', { p_admin_id: admin.adminId, p_admin_pass: admin.adminPass, p_mobile: msgCurrentMobile });
+    toast('Conversation closed.', 'ok');
+    openMessageThread(msgCurrentMobile, document.getElementById('msg-thread-name').textContent);
+    loadMessageThreads();
+  }catch(err){
+    toast('Could not close conversation: ' + err.message, 'err');
+  }
+});
+document.getElementById('btn-msg-delete').addEventListener('click', async () => {
+  if (!msgCurrentMobile) return;
+  const typed = prompt('⚠️ This will permanently DELETE this entire conversation.\n\nType DELETE (in capitals) to confirm.');
+  if (typed !== 'DELETE') return;
+  try{
+    await rpc('admin_delete_thread', { p_admin_id: admin.adminId, p_admin_pass: admin.adminPass, p_mobile: msgCurrentMobile });
+    toast('Conversation deleted.', 'ok');
+    document.getElementById('msg-thread-wrap').style.display = 'none';
+    msgCurrentMobile = null;
+    loadMessageThreads();
+  }catch(err){
+    toast('Delete failed: ' + err.message, 'err');
+  }
+});
 
 /* ==========================================================================
    CSV PARSER (RFC4180-ish — handles quoted fields with commas/newlines)
