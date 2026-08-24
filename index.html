@@ -3423,7 +3423,8 @@ async function loadLiveSessions(forceRender){
   const statBar = document.getElementById('live-stat-bar');
   try{
     if (!examConfig.duration_seconds) await loadExamConfig();
-    const rows = await restGetAll('live_sessions', 'select=mobile,name,login_time,current_index,tab_switch_count,fullscreen_exit_count&status=eq.In Progress (Live)');
+    const allRows = await rpc('admin_get_live_sessions', { p_admin_id: admin.adminId, p_admin_pass: admin.adminPass });
+    const rows = (allRows || []).filter(r => r.status === 'In Progress (Live)');
     const signature = JSON.stringify(rows);
     if (!forceRender && signature === liveSessionsLastSignature) return;
     liveSessionsLastSignature = signature;
@@ -3520,7 +3521,10 @@ let submittedSessionsLastSignature = null;
 async function loadSubmittedSessions(forceRender){
   const listEl = document.getElementById('submitted-sessions-list');
   try{
-    const rows = await restGetAll('live_sessions', 'select=mobile,name,login_time,logout_time,attempted,tab_switch_count,fullscreen_exit_count&status=eq.Submitted&order=logout_time.desc');
+    const allRows = await rpc('admin_get_live_sessions', { p_admin_id: admin.adminId, p_admin_pass: admin.adminPass });
+    const rows = (allRows || [])
+      .filter(r => r.status === 'Submitted')
+      .sort((a,b) => (b.logout_time||'').localeCompare(a.logout_time||''));
     const signature = JSON.stringify(rows);
     if (!forceRender && signature === submittedSessionsLastSignature) return;
     submittedSessionsLastSignature = signature;
@@ -3528,11 +3532,11 @@ async function loadSubmittedSessions(forceRender){
       listEl.innerHTML = '<div class="empty-state">No submissions yet.</div>';
       return;
     }
-    const mobiles = rows.map(r => r.mobile);
+    const mobileSet = new Set(rows.map(r => r.mobile));
     let resultsMap = {};
     try{
-      const resultsRows = await restGetAll('exam_results', `select=mobile,final_marks,correct,wrong,total_q,exam_status&mobile=in.(${mobiles.map(m=>`"${m}"`).join(',')})`);
-      resultsRows.forEach(r => { resultsMap[r.mobile] = r; });
+      const resultsRows = await rpc('admin_get_all_exam_results', { p_admin_id: admin.adminId, p_admin_pass: admin.adminPass });
+      (resultsRows || []).forEach(r => { if (mobileSet.has(r.mobile)) resultsMap[r.mobile] = r; });
     }catch(e){ /* marks enrichment optional */ }
 
     listEl.innerHTML = rows.map(r => {
