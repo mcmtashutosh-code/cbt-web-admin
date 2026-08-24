@@ -59,6 +59,7 @@
   .btn-primary{background:var(--accent); color:#04182b;}
   .btn-ghost{background:var(--field-2); color:var(--text-dim);}
   .btn-danger{background:var(--danger); color:#fff;}
+  .btn-warn{background:var(--warn); color:#1a0f00;}
   .btn-di{background:#7c4dff; color:#fff;}
   .btn-success{background:var(--success); color:#04231d;}
   .btn:disabled{opacity:.5; cursor:default;}
@@ -558,6 +559,7 @@
     <div class="stat-bar" id="live-stat-bar"></div>
 
     <button class="btn btn-ghost btn-sm" id="btn-relogin" style="margin-bottom:8px;">🔓 Allow student re-login (by mobile)</button>
+    <button class="btn btn-warn btn-sm" id="btn-force-submit-all" style="margin-bottom:8px;">⏱ Force submit all expired</button>
     <button class="btn btn-danger btn-sm" id="btn-reset-sessions" style="margin-bottom:16px;">🗑 Reset all live sessions</button>
 
     <div id="live-sessions-list"><div class="spin"></div></div>
@@ -3280,6 +3282,7 @@ let liveSessionsLastSignature = null;
 
 function openLiveSection(){
   showView('view-live');
+  loadExamConfig();
   loadLiveExamWindow();
   loadLiveSchedule();
   loadLiveSessions(true);
@@ -3360,11 +3363,39 @@ document.getElementById('btn-clear-schedule').addEventListener('click', async ()
   }
 });
 
+/* ---- IST wall-clock helpers (login_time is stored as HH24:MI:SS text in IST) ---- */
+function getISTNow(){
+  const now = new Date();
+  const utcMs = now.getTime() + (now.getTimezoneOffset() * 60000);
+  return new Date(utcMs + 5.5 * 3600000);
+}
+function loginTimeToISTDate(loginTimeStr){
+  if (!loginTimeStr) return null;
+  const parts = loginTimeStr.split(':').map(Number);
+  if (parts.length < 3 || parts.some(isNaN)) return null;
+  const istNow = getISTNow();
+  const d = new Date(istNow.getTime());
+  d.setHours(parts[0], parts[1], parts[2], 0);
+  if (d.getTime() > istNow.getTime()) d.setDate(d.getDate() - 1);
+  return d;
+}
+function elapsedSecondsSinceLogin(loginTimeStr){
+  const loginDate = loginTimeToISTDate(loginTimeStr);
+  if (!loginDate) return null;
+  return Math.floor((getISTNow().getTime() - loginDate.getTime()) / 1000);
+}
+function formatDuration(sec){
+  sec = Math.max(0, Math.floor(sec));
+  const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = sec % 60;
+  return h > 0 ? `${h}h ${m}m` : `${m}m ${s}s`;
+}
+
 async function loadLiveSessions(forceRender){
   const listEl = document.getElementById('live-sessions-list');
   const statBar = document.getElementById('live-stat-bar');
   try{
-    const rows = await rpc('admin_get_live_sessions', { p_admin_id: admin.adminId, p_admin_pass: admin.adminPass });
+    if (!examConfig.duration_seconds) await loadExamConfig();
+    const rows = await restGetAll('live_sessions', 'select=mobile,name,login_time,current_index,tab_switch_count,fullscreen_exit_count&status=eq.In Progress (Live)');
     const signature = JSON.stringify(rows);
     if (!forceRender && signature === liveSessionsLastSignature) return;
     liveSessionsLastSignature = signature;
@@ -3373,13 +3404,32 @@ async function loadLiveSessions(forceRender){
       listEl.innerHTML = '<div class="empty-state">No students are currently in a live exam session.</div>';
       return;
     }
-    statBar.innerHTML = `<div class="stat-box"><div class="sv">${rows.length}</div><div class="sk">Active sessions</div></div>`;
-    listEl.innerHTML = rows.map(r => `
-      <div class="ch-manage-card">
-        <div class="ch-manage-q">${esc(r.name || r.mobile)} <span class="ms">(${esc(r.mobile)})</span></div>
-        <div class="ms" style="margin:4px 0 2px;">${r.current_index != null ? `Q${(r.current_index||0)+1}` : ''} ${r.time_left != null ? `· ${Math.floor(r.time_left/60)}m ${r.time_left%60}s left` : ''}${r.tab_switch_count ? ` · <span style="color:var(--warn);">👁 ${r.tab_switch_count} tab switch${r.tab_switch_count===1?'':'es'}</span>` : ''}</div>
-        <button class="btn btn-danger btn-sm" data-mobile="${esc(r.mobile)}" style="margin-top:6px;">Force release</button>
+
+    const durationSec = examConfig.duration_seconds || 0;
+    const withTiming = rows.map(r => {
+      const elapsed = elapsedSecondsSinceLogin(r.login_time);
+      const remaining = elapsed != null ? durationSec - elapsed : null;
+      const expired = remaining != null && remaining <= 0;
+      return { ...r, elapsed, remaining, expired };
+    });
+    const expiredCount = withTiming.filter(r => r.expired).length;
+
+    statBar.innerHTML = `
+      <div class="stat-box"><div class="sv">${rows.length}</div><div class="sk">Active sessions</div></div>
+      <div class="stat-box"><div class="sv" style="${expiredCount ? 'color:var(--warn);' : ''}">${expiredCount}</div><div class="sk">Time's up</div></div>`;
+
+    listEl.innerHTML = withTiming.map(r => `
+      <div class="ch-manage-card" style="${r.expired ? 'border-color:var(--warn); background:rgba(255,193,7,0.06);' : ''}">
+        <div class="ch-manage-q">${r.expired ? '⏱ ' : ''}${esc(r.name || r.mobile)} <span class="ms">(${esc(r.mobile)})</span></div>
+        <div class="ms" style="margin:4px 0 2px;">${r.current_index != null ? `Q${(r.current_index||0)+1}` : ''}
+          ${r.remaining != null ? (r.expired ? ` · <span style="color:var(--warn); font-weight:700;">Time's up — ${formatDuration(-r.remaining)} over</span>` : ` · ${formatDuration(r.remaining)} left`) : ''}
+          ${r.tab_switch_count ? ` · <span style="color:var(--warn);">👁 ${r.tab_switch_count} tab switch${r.tab_switch_count===1?'':'es'}</span>` : ''}</div>
+        <div style="display:flex; gap:8px; margin-top:6px; flex-wrap:wrap;">
+          ${r.expired ? `<button class="btn btn-warn btn-sm" data-submit-mobile="${esc(r.mobile)}">⏱ Force submit</button>` : ''}
+          <button class="btn btn-danger btn-sm" data-mobile="${esc(r.mobile)}">Force release</button>
+        </div>
       </div>`).join('');
+
     listEl.querySelectorAll('button[data-mobile]').forEach(btn => {
       btn.addEventListener('click', async () => {
         if (!confirm(`Force release ${btn.dataset.mobile}'s session?`)) return;
@@ -3394,10 +3444,49 @@ async function loadLiveSessions(forceRender){
         }
       });
     });
+    listEl.querySelectorAll('button[data-submit-mobile]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        if (!confirm(`Force submit ${btn.dataset.submitMobile}'s exam using their saved answers? This cannot be undone.`)) return;
+        btn.disabled = true; btn.textContent = 'Submitting...';
+        try{
+          const r = await rpc('admin_force_submit_exam', { p_admin_id: admin.adminId, p_admin_pass: admin.adminPass, p_mobile: btn.dataset.submitMobile });
+          if (r.error === 'not_yet_expired'){
+            toast(`Not yet — ${formatDuration(r.remaining_sec)} of exam time still remains.`, 'err');
+            btn.disabled = false; btn.textContent = '⏱ Force submit';
+            return;
+          }
+          if (r.error){
+            toast('Force submit failed: ' + r.error, 'err');
+            btn.disabled = false; btn.textContent = '⏱ Force submit';
+            return;
+          }
+          toast(`✅ Submitted — ${r.correct}/${r.total_q} correct, ${r.final_marks} marks (${r.status}).`, 'ok');
+          loadLiveSessions(true);
+        }catch(err){
+          toast('Force submit failed: ' + err.message, 'err');
+          btn.disabled = false; btn.textContent = '⏱ Force submit';
+        }
+      });
+    });
   }catch(err){
     listEl.innerHTML = `<div class="empty-state">Unable to load live sessions.<br><span style="color:#e74c3c; font-size:11px;">${esc(err.message||'')}</span></div>`;
   }
 }
+document.getElementById('btn-force-submit-all').addEventListener('click', async () => {
+  if (!confirm("Force submit ALL sessions whose exam time has fully run out? Students who are still within their allotted time will NOT be affected.")) return;
+  const btn = document.getElementById('btn-force-submit-all');
+  btn.disabled = true; btn.textContent = 'Submitting...';
+  try{
+    const r = await rpc('admin_force_submit_all_expired', { p_admin_id: admin.adminId, p_admin_pass: admin.adminPass });
+    if (r.error){ toast('Failed: ' + r.error, 'err'); return; }
+    toast(`✅ Force-submitted ${r.submitted_count} expired session(s).`, 'ok');
+    loadLiveSessions(true);
+  }catch(err){
+    toast('Failed: ' + err.message, 'err');
+  }finally{
+    btn.disabled = false; btn.textContent = '⏱ Force submit all expired';
+  }
+});
 
 document.getElementById('btn-relogin').addEventListener('click', async () => {
   const mobile = prompt('Enter the student\'s mobile number to allow re-login:');
