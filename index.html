@@ -562,7 +562,17 @@
     <button class="btn btn-warn btn-sm" id="btn-force-submit-all" style="margin-bottom:8px;">⏱ Force submit all expired</button>
     <button class="btn btn-danger btn-sm" id="btn-reset-sessions" style="margin-bottom:16px;">🗑 Reset all live sessions</button>
 
-    <div id="live-sessions-list"><div class="spin"></div></div>
+    <div class="tabs" style="margin-bottom:10px;">
+      <div class="tab active" id="ltab-live">🟢 Live</div>
+      <div class="tab" id="ltab-submitted">✅ Submitted</div>
+    </div>
+
+    <div class="ctab-panel active" id="lpanel-live">
+      <div id="live-sessions-list"><div class="spin"></div></div>
+    </div>
+    <div class="ctab-panel" id="lpanel-submitted">
+      <div id="submitted-sessions-list"><div class="spin"></div></div>
+    </div>
   </div>
 
   <!-- ============ NOTICES & MESSAGES ============ -->
@@ -3285,9 +3295,27 @@ function openLiveSection(){
   loadExamConfig();
   loadLiveExamWindow();
   loadLiveSchedule();
-  loadLiveSessions(true);
-  liveRefreshIntervalId = setInterval(() => loadLiveSessions(false), 5000);
+  setLiveTab('live');
 }
+
+let liveTabCurrent = 'live';
+function setLiveTab(tab){
+  liveTabCurrent = tab;
+  document.getElementById('ltab-live').classList.toggle('active', tab === 'live');
+  document.getElementById('ltab-submitted').classList.toggle('active', tab === 'submitted');
+  document.getElementById('lpanel-live').classList.toggle('active', tab === 'live');
+  document.getElementById('lpanel-submitted').classList.toggle('active', tab === 'submitted');
+  if (liveRefreshIntervalId){ clearInterval(liveRefreshIntervalId); liveRefreshIntervalId = null; }
+  if (tab === 'live'){
+    loadLiveSessions(true);
+    liveRefreshIntervalId = setInterval(() => loadLiveSessions(false), 5000);
+  } else {
+    loadSubmittedSessions(true);
+    liveRefreshIntervalId = setInterval(() => loadSubmittedSessions(false), 5000);
+  }
+}
+document.getElementById('ltab-live').addEventListener('click', () => setLiveTab('live'));
+document.getElementById('ltab-submitted').addEventListener('click', () => setLiveTab('submitted'));
 
 async function loadLiveExamWindow(){
   const statusEl = document.getElementById('ew-status');
@@ -3487,6 +3515,41 @@ document.getElementById('btn-force-submit-all').addEventListener('click', async 
     btn.disabled = false; btn.textContent = '⏱ Force submit all expired';
   }
 });
+
+let submittedSessionsLastSignature = null;
+async function loadSubmittedSessions(forceRender){
+  const listEl = document.getElementById('submitted-sessions-list');
+  try{
+    const rows = await restGetAll('live_sessions', 'select=mobile,name,login_time,logout_time,attempted,tab_switch_count,fullscreen_exit_count&status=eq.Submitted&order=logout_time.desc');
+    const signature = JSON.stringify(rows);
+    if (!forceRender && signature === submittedSessionsLastSignature) return;
+    submittedSessionsLastSignature = signature;
+    if (!rows || !rows.length){
+      listEl.innerHTML = '<div class="empty-state">No submissions yet.</div>';
+      return;
+    }
+    const mobiles = rows.map(r => r.mobile);
+    let resultsMap = {};
+    try{
+      const resultsRows = await restGetAll('exam_results', `select=mobile,final_marks,correct,wrong,total_q,exam_status&mobile=in.(${mobiles.map(m=>`"${m}"`).join(',')})`);
+      resultsRows.forEach(r => { resultsMap[r.mobile] = r; });
+    }catch(e){ /* marks enrichment optional */ }
+
+    listEl.innerHTML = rows.map(r => {
+      const res = resultsMap[r.mobile];
+      const marksInfo = res
+        ? `${res.correct}/${res.total_q} correct · ${res.final_marks} marks · <span style="color:${res.exam_status === 'PASS' ? '#27ae60' : 'var(--danger)'}; font-weight:700;">${esc(res.exam_status || '')}</span>`
+        : 'Result not yet available';
+      return `<div class="ch-manage-card">
+        <div class="ch-manage-q">✅ ${esc(r.name || r.mobile)} <span class="ms">(${esc(r.mobile)})</span></div>
+        <div class="ms" style="margin:4px 0 2px;">${marksInfo}</div>
+        <div class="ms">Login: ${esc(r.login_time||'—')} · Logout: ${esc(r.logout_time||'—')}${r.tab_switch_count ? ` · <span style="color:var(--warn);">👁 ${r.tab_switch_count} tab switch${r.tab_switch_count===1?'':'es'}</span>` : ''}</div>
+      </div>`;
+    }).join('');
+  }catch(err){
+    listEl.innerHTML = `<div class="empty-state">Unable to load submitted sessions.<br><span style="color:#e74c3c; font-size:11px;">${esc(err.message||'')}</span></div>`;
+  }
+}
 
 document.getElementById('btn-relogin').addEventListener('click', async () => {
   const mobile = prompt('Enter the student\'s mobile number to allow re-login:');
