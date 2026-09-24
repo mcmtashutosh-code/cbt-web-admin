@@ -489,6 +489,15 @@
       <input type="file" id="up-exam-file" accept=".csv">
       <div class="error-text" id="up-exam-status"></div>
       <button class="btn btn-primary" id="btn-up-exam" style="margin:10px 0 22px;">📤 Upload exam questions</button>
+
+      <div style="border-top:1px solid var(--line-soft); margin:6px 0 18px;"></div>
+      <label class="field-label" style="color:var(--accent-text);">🧪 No CSV ready? Build the exam from your Practice bank</label>
+      <div class="upload-hint">Pick a subject, then how many questions to pull from each topic. This replaces the current exam paper and clears all previous sessions/results so every student can attempt the new exam fresh.</div>
+      <select id="eb-subject-select" style="margin-top:8px;"><option value="">Loading subjects...</option></select>
+      <div id="eb-topic-list" style="margin-top:8px;"><div class="empty-state" style="padding:12px 0;">Select a subject above to see its topics.</div></div>
+      <div class="avail-note" id="eb-total-note" style="margin:6px 0 10px;">Total selected across all subjects: 0</div>
+      <div class="error-text" id="eb-status"></div>
+      <button class="btn btn-danger" id="btn-build-exam" style="margin-bottom:22px;">⚡ Generate &amp; activate this exam</button>
     </div>
 
     <!-- STUDENTS UPLOAD -->
@@ -1153,6 +1162,128 @@ document.getElementById('btn-backup-practice').addEventListener('click', async (
     toast(`Backed up ${rows.length} practice question(s).`, 'ok');
   }catch(err){ toast('Unable to create backup.', 'err'); }
   finally{ btn.disabled = false; btn.textContent = '📥 Download backup (CSV)'; }
+});
+
+let examBuildGrouped = {};      // { subject: { topic: availableCount } }
+let examBuildSelections = {};   // { "subject|||topic": count } — persists across subject switches
+
+async function loadExamBuildSetup(){
+  const statusEl = document.getElementById('eb-status');
+  statusEl.textContent = '';
+  const subjSel = document.getElementById('eb-subject-select');
+  const listEl = document.getElementById('eb-topic-list');
+  subjSel.innerHTML = '<option value="">Loading subjects...</option>';
+  examBuildSelections = {};
+  try{
+    const rows = await restGetAll('practice_questions', 'select=subject,topic');
+    const norm = (v, d='General') => (v || '').trim() || d;
+    examBuildGrouped = {};
+    rows.forEach(r => {
+      const sub = norm(r.subject);
+      const top = norm(r.topic);
+      examBuildGrouped[sub] = examBuildGrouped[sub] || {};
+      examBuildGrouped[sub][top] = (examBuildGrouped[sub][top] || 0) + 1;
+    });
+    const subjects = Object.keys(examBuildGrouped).sort();
+    if (!subjects.length){
+      subjSel.innerHTML = '<option value="">No practice questions available</option>';
+      listEl.innerHTML = '';
+      return;
+    }
+    subjSel.innerHTML = '<option value="">-- Select a subject --</option>' +
+      subjects.map(s => `<option value="${esc(s)}">${esc(s)}</option>`).join('');
+    listEl.innerHTML = '<div class="empty-state" style="padding:12px 0;">Select a subject above to see its topics.</div>';
+    updateExamBuildTotal();
+  }catch(err){
+    subjSel.innerHTML = '<option value="">Unable to load</option>';
+  }
+}
+
+function renderExamBuildTopicsForSubject(subject){
+  const listEl = document.getElementById('eb-topic-list');
+  if (!subject){
+    listEl.innerHTML = '<div class="empty-state" style="padding:12px 0;">Select a subject above to see its topics.</div>';
+    return;
+  }
+  const topics = Object.keys(examBuildGrouped[subject] || {}).sort();
+  listEl.innerHTML = topics.map(topic => {
+    const available = examBuildGrouped[subject][topic];
+    const key = subject + '|||' + topic;
+    const current = examBuildSelections[key] || 0;
+    return `
+      <div class="ch-manage-card" style="display:flex; align-items:center; justify-content:space-between; gap:10px; padding:10px 12px; margin-bottom:6px;">
+        <div>
+          <div style="font-weight:600; font-size:13px;">${esc(topic)}</div>
+          <div class="ms" style="margin:0;">Max ${available} available</div>
+        </div>
+        <input type="number" min="0" max="${available}" value="${current}" data-key="${esc(key)}" data-max="${available}" class="eb-topic-count" style="width:70px; text-align:center;">
+      </div>`;
+  }).join('');
+  listEl.querySelectorAll('.eb-topic-count').forEach(inp => {
+    inp.addEventListener('input', () => {
+      let v = parseInt(inp.value, 10) || 0;
+      const max = parseInt(inp.dataset.max, 10) || 0;
+      if (v < 0) v = 0;
+      if (v > max) v = max;
+      inp.value = v;
+      examBuildSelections[inp.dataset.key] = v;
+      updateExamBuildTotal();
+    });
+  });
+}
+
+function updateExamBuildTotal(){
+  const total = Object.values(examBuildSelections).reduce((a,b) => a + b, 0);
+  document.getElementById('eb-total-note').textContent = `Total selected across all subjects: ${total}`;
+}
+
+document.getElementById('eb-subject-select').addEventListener('change', (e) => {
+  renderExamBuildTopicsForSubject(e.target.value);
+});
+
+document.getElementById('btn-build-exam').addEventListener('click', async () => {
+  const statusEl = document.getElementById('eb-status');
+  statusEl.textContent = '';
+
+  const selections = Object.keys(examBuildSelections)
+    .filter(key => examBuildSelections[key] > 0)
+    .map(key => {
+      const [subject, topic] = key.split('|||');
+      return { subject, topic, count: examBuildSelections[key] };
+    });
+  if (!selections.length){ statusEl.textContent = 'Please select at least one question from any topic.'; return; }
+
+  const totalQ = selections.reduce((a,s) => a + s.count, 0);
+  if (!confirm(
+    `This will:\n\n` +
+    `• Replace the current exam paper with ${totalQ} question(s) from your Practice bank\n` +
+    `• Permanently clear ALL previous live sessions and submitted results\n` +
+    `• Let every student attempt this new exam fresh\n\n` +
+    `Continue?`
+  )) return;
+  const typed = prompt('To confirm, type GENERATE (in capitals):');
+  if (typed !== 'GENERATE'){ statusEl.textContent = 'Cancelled.'; return; }
+
+  const btn = document.getElementById('btn-build-exam');
+  btn.disabled = true; btn.textContent = 'Generating...';
+  try{
+    const result = await rpc('admin_build_exam_from_practice', {
+      p_admin_id: admin.adminId, p_admin_pass: admin.adminPass, p_selections: selections
+    });
+    if (result && result.ok){
+      toast(`Exam generated: ${result.questions_inserted} question(s). Cleared ${result.sessions_deleted} session(s) and ${result.results_deleted} old result(s).`, 'ok');
+      examBuildSelections = {};
+      document.getElementById('eb-subject-select').value = '';
+      renderExamBuildTopicsForSubject('');
+      updateExamBuildTotal();
+    } else {
+      statusEl.textContent = 'Unable to generate the exam. Please try again.';
+    }
+  }catch(err){
+    statusEl.textContent = err.message || 'Connection error.';
+  }finally{
+    btn.disabled = false; btn.textContent = '⚡ Generate & activate this exam';
+  }
 });
 
 document.getElementById('btn-backup-exam').addEventListener('click', async () => {
@@ -2204,6 +2335,7 @@ function setUploadTab(tab){
   upanelPractice.classList.toggle('active', tab === 'practice');
   upanelExam.classList.toggle('active', tab === 'exam');
   upanelStudents.classList.toggle('active', tab === 'students');
+  if (tab === 'exam') loadExamBuildSetup();
 }
 utabPractice.addEventListener('click', () => setUploadTab('practice'));
 utabExam.addEventListener('click', () => setUploadTab('exam'));
