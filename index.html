@@ -274,8 +274,8 @@
       </div>
       <div class="menu-card" id="menu-settings">
         <div class="mi">🔑</div>
-        <div class="mt">Admin credentials</div>
-        <div class="ms">Change your admin ID and password</div>
+        <div class="mt">Passwords</div>
+        <div class="ms">Change admin login &amp; reset a student's password</div>
       </div>
       <div class="menu-card" id="menu-findfix">
         <div class="mi">🔍</div>
@@ -647,6 +647,23 @@
 
     <div class="error-text" id="set-cred-error"></div>
     <button class="btn btn-primary" id="btn-update-creds" style="margin:10px 0 22px;">🔑 Update credentials</button>
+
+    <div class="section-title" style="margin-top:26px;">Reset a student's password</div>
+    <div class="section-sub">Agar koi student apna password bhool gaya hai, to yahan uska naya password set kariye aur student ko bata dijiye. Student login ke baad ise badal sakta hai. (Passwords ab surakshit hain — kisi ko dikhte nahi.)</div>
+
+    <div class="upload-hint" id="rst-noemail" style="display:none;"></div>
+
+    <label class="field-label">Student mobile number</label>
+    <input id="rst-mobile" type="tel" inputmode="numeric" placeholder="10-digit registered mobile">
+
+    <label class="field-label">New password for the student</label>
+    <div class="pw-row">
+      <input id="rst-pass" type="password" placeholder="Min 6 characters, letters + numbers">
+      <button type="button" class="pw-toggle" id="rst-pw-toggle">SHOW</button>
+    </div>
+
+    <div class="error-text" id="rst-error"></div>
+    <button class="btn btn-primary" id="btn-reset-student-pw" style="margin:10px 0 22px;">🔁 Reset student password</button>
   </div>
 
   <!-- ============ FIND & FIX QUESTION ============ -->
@@ -1077,6 +1094,27 @@ async function rpc(fn, body){
   return res.json();
 }
 
+/* Multi-tenant: paged RPC read (set-returning functions, 1000 rows per page) */
+async function rpcGetAll(fn, body){
+  const pageSize = 1000;
+  let all = [];
+  let offset = 0;
+  while (true){
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/${fn}?limit=${pageSize}&offset=${offset}`, {
+      method:'POST',
+      headers:{ 'apikey':SUPABASE_KEY, 'Authorization':`Bearer ${SUPABASE_KEY}`, 'Content-Type':'application/json' },
+      body: JSON.stringify(body)
+    });
+    if (!res.ok) throw new Error(`Fetch failed (${res.status})`);
+    const batch = await res.json();
+    all = all.concat(batch || []);
+    if (!batch || batch.length < pageSize) break;
+    offset += pageSize;
+  }
+  return all;
+}
+function adminCreds(){ return { p_admin_id: admin.adminId, p_admin_pass: admin.adminPass }; }
+
 async function restGetAll(table, query){
   const pageSize = 1000;
   let all = [];
@@ -1136,7 +1174,7 @@ document.getElementById('btn-download-topic').addEventListener('click', async ()
   const btn = document.getElementById('btn-download-topic');
   btn.disabled = true; btn.textContent = 'Preparing download...';
   try{
-    const allRows = await restGetAll('practice_questions', 'select=*');
+    const allRows = await rpcGetAll('admin_get_all_practice_questions', adminCreds());
     const norm = v => (v || '').trim() || 'General';
     const rows = allRows.filter(r => norm(r.subject) === subject && norm(r.topic) === topic);
     if (!rows.length){ toast('No questions found for this subject/topic.', 'err'); return; }
@@ -1153,7 +1191,7 @@ document.getElementById('btn-backup-practice').addEventListener('click', async (
   const btn = document.getElementById('btn-backup-practice');
   btn.disabled = true; btn.textContent = 'Preparing backup...';
   try{
-    const rows = await restGetAll('practice_questions', 'select=*');
+    const rows = await rpcGetAll('admin_get_all_practice_questions', adminCreds());
     if (!rows.length){ toast('No practice questions to back up.', 'err'); return; }
     downloadCsv('practice-questions',
       ['question','option1','option2','option3','option4','correct_index','subject','topic','difficulty','solution'],
@@ -1175,7 +1213,7 @@ async function loadExamBuildSetup(){
   subjSel.innerHTML = '<option value="">Loading subjects...</option>';
   examBuildSelections = {};
   try{
-    const rows = await restGetAll('practice_questions', 'select=subject,topic');
+    const rows = await rpcGetAll('admin_get_all_practice_questions', adminCreds());
     const norm = (v, d='General') => (v || '').trim() || d;
     examBuildGrouped = {};
     rows.forEach(r => {
@@ -1290,7 +1328,7 @@ document.getElementById('btn-backup-exam').addEventListener('click', async () =>
   const btn = document.getElementById('btn-backup-exam');
   btn.disabled = true; btn.textContent = 'Preparing backup...';
   try{
-    const rows = await restGetAll('questions', 'select=*');
+    const rows = await rpcGetAll('admin_get_all_exam_questions', adminCreds());
     if (!rows.length){ toast('No exam questions to back up.', 'err'); return; }
     downloadCsv('exam-questions',
       ['question','option1','option2','option3','option4','correct_index','section','subject','topic','difficulty','di_content','di_group','di_image'],
@@ -1308,8 +1346,8 @@ document.getElementById('btn-backup-students').addEventListener('click', async (
     const rows = await rpc('admin_export_students', { p_admin_id: admin.adminId, p_admin_pass: admin.adminPass });
     if (!rows || !rows.length){ toast('No students to back up.', 'err'); return; }
     downloadCsv('students',
-      ['mobile','name','password','email','class_name','semester_year','university','gender'],
-      rows.map(r => [r.mobile,r.name,r.password,r.email,r.class_name,r.semester_year,r.university,r.gender])
+      ['mobile','name','email','class_name','semester_year','university','gender'],
+      rows.map(r => [r.mobile,r.name,r.email,r.class_name,r.semester_year,r.university,r.gender])
     );
     toast(`Backed up ${rows.length} student(s).`, 'ok');
   }catch(err){ toast('Unable to create backup.', 'err'); }
@@ -1366,6 +1404,11 @@ async function doLogin(){
 
     admin = { adminId, adminPass };
     btn.disabled = false; btn.textContent = 'Sign in';
+    if (check.institute_name){
+      const nm = document.querySelector('.brand-l .name');
+      if (nm) nm.textContent = check.institute_name + ' — Control Panel';
+      document.title = check.institute_name + ' — CBT Admin Dashboard';
+    }
     startSessionWatch();
     showView('view-menu');
     loadDashboardStats();
@@ -1381,6 +1424,17 @@ document.getElementById('menu-results').addEventListener('click', openResultsSec
 document.getElementById('menu-upload').addEventListener('click', openUploadSection);
 document.getElementById('menu-live').addEventListener('click', openLiveSection);
 document.getElementById('menu-settings').addEventListener('click', openSettingsSection);
+document.getElementById('menu-settings').addEventListener('click', async () => {
+  const el = document.getElementById('rst-noemail');
+  el.style.display = 'none';
+  try{
+    const n = await rpc('admin_count_students_without_email', adminCreds());
+    if (typeof n === 'number' && n > 0){
+      el.textContent = `ℹ️ ${n} student(s) ki email registered nahi hai — ye "Forgot password" (email OTP) use nahi kar payenge. Password bhoolne par unka reset yahan se kariye, aur unhe My Profile mein email jodne ko kahiye.`;
+      el.style.display = 'block';
+    }
+  }catch(e){ /* ignore */ }
+});
 document.getElementById('menu-findfix').addEventListener('click', openFindFixSection);
 document.getElementById('menu-addq').addEventListener('click', openAddQuestionSection);
 document.getElementById('menu-examsettings').addEventListener('click', openExamSettingsSection);
@@ -2006,13 +2060,8 @@ document.getElementById('btn-mock-detail-back').addEventListener('click', loadMo
 
 async function loadExamConfig(){
   try{
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/exam_configurations?select=*&id=eq.1`, {
-      headers:{ 'apikey':SUPABASE_KEY, 'Authorization':`Bearer ${SUPABASE_KEY}` }
-    });
-    if (res.ok){
-      const rows = await res.json();
-      if (rows && rows[0]) examConfig = rows[0];
-    }
+    const rows = await rpc('admin_get_exam_config', adminCreds());
+    if (rows && rows[0]) examConfig = rows[0];
   }catch(err){ /* fall back to defaults */ }
 }
 
@@ -2237,7 +2286,7 @@ async function refreshPracticeQuestionCount(){
   const el = document.getElementById('practice-total-count');
   el.textContent = 'Loading current question count...';
   try{
-    const rows = await restGetAll('practice_questions', 'select=id');
+    const rows = await rpcGetAll('admin_get_all_practice_questions', adminCreds());
     el.textContent = `📊 Currently uploaded: ${rows.length} practice question${rows.length === 1 ? '' : 's'}`;
   }catch(err){
     el.textContent = 'Unable to load current question count.';
@@ -2251,7 +2300,7 @@ async function populateSubjectTopicSelects(subjectSelId, topicSelId){
   const topicSel = document.getElementById(topicSelId);
   subjSel.innerHTML = '<option value="">Loading subjects...</option>';
   try{
-    const rows = await restGetAll('practice_questions', 'select=subject,topic');
+    const rows = await rpcGetAll('admin_get_all_practice_questions', adminCreds());
     const norm = v => (v || '').trim() || 'General';
     const bySubject = {};
     rows.forEach(r => {
@@ -2521,10 +2570,7 @@ function openLiveSection(){
 async function loadExamWindowStatus(){
   const statusEl = document.getElementById('ew-status');
   try{
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/exam_configurations?select=exam_window_active,scheduled_start_at,scheduled_end_at&id=eq.1`, {
-      headers:{ 'apikey':SUPABASE_KEY, 'Authorization':`Bearer ${SUPABASE_KEY}` }
-    });
-    const rows = await res.json();
+    const rows = await rpc('admin_get_exam_config', adminCreds());
     examWindowActive = rows && rows[0] ? (rows[0].exam_window_active !== false) : true;
     renderWindowStatus();
     renderScheduleStatus(rows && rows[0] ? rows[0].scheduled_start_at : null);
@@ -3036,6 +3082,49 @@ document.getElementById('btn-update-creds').addEventListener('click', async () =
     errEl.textContent = 'Connection error. Please try again.';
   }finally{
     btn.disabled = false; btn.textContent = '🔑 Update credentials';
+  }
+});
+
+document.getElementById('rst-pw-toggle').addEventListener('click', (e) => {
+  const inp = document.getElementById('rst-pass');
+  const showing = inp.type === 'text';
+  inp.type = showing ? 'password' : 'text';
+  e.target.textContent = showing ? 'SHOW' : 'HIDE';
+});
+
+document.getElementById('btn-reset-student-pw').addEventListener('click', async () => {
+  const mobile = document.getElementById('rst-mobile').value.trim();
+  const newPass = document.getElementById('rst-pass').value;
+  const errEl = document.getElementById('rst-error');
+  errEl.textContent = '';
+  if (!/^\d{10}$/.test(mobile)){ errEl.textContent = 'Enter a valid 10-digit mobile number.'; return; }
+  if (newPass.length < 6 || !/[a-zA-Z]/.test(newPass) || !/[0-9]/.test(newPass)){
+    errEl.textContent = 'Password must be at least 6 characters and contain both letters and numbers.'; return;
+  }
+  if (!confirm(`Reset password for ${mobile}?\n\nThe student will need to use the new password from now on.`)) return;
+
+  const btn = document.getElementById('btn-reset-student-pw');
+  btn.disabled = true; btn.textContent = 'Resetting...';
+  try{
+    const r = await rpc('admin_reset_student_password', {
+      p_admin_id: admin.adminId, p_admin_pass: admin.adminPass,
+      p_mobile: mobile, p_new_password: newPass
+    });
+    if (r && r.ok){
+      toast(`Password reset for ${r.name || mobile}. Share the new password with the student.`, 'ok');
+      document.getElementById('rst-mobile').value = '';
+      document.getElementById('rst-pass').value = '';
+    } else if (r && r.error === 'student_not_found'){
+      errEl.textContent = 'No student with this mobile number in your institute.';
+    } else if (r && r.error === 'weak_password'){
+      errEl.textContent = 'Password must be at least 6 characters and contain both letters and numbers.';
+    } else {
+      errEl.textContent = 'Unable to reset password. Please try again.';
+    }
+  }catch(err){
+    errEl.textContent = 'Connection error. Please try again.';
+  }finally{
+    btn.disabled = false; btn.textContent = '🔁 Reset student password';
   }
 });
 
