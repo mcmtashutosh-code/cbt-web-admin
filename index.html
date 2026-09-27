@@ -241,6 +241,17 @@
       <div class="dash-stat-chip"><span class="dash-stat-num" id="stat-shares">—</span><span class="dash-stat-lbl">App shares</span></div>
     </div>
 
+    <div class="exam-window-card" id="join-link-card" style="flex-direction:column; align-items:stretch; gap:8px; margin-bottom:18px; display:none;">
+      <div class="ew-left">
+        <div class="ew-label">🔗 Aapke students ka registration link</div>
+        <div class="ew-status" style="font-size:12px; font-weight:500;">Naye students isi link se register karein. Registration ke baad unhe "Pending registrations" mein approve kariye.</div>
+      </div>
+      <div style="display:flex; gap:8px; align-items:center;">
+        <input id="join-link-input" readonly style="flex:1; min-width:0; font-size:12px;">
+        <button class="btn btn-primary btn-sm" id="btn-copy-join-link">📋 Copy</button>
+      </div>
+    </div>
+
     <div class="menu-grid">
       <div class="menu-card" id="menu-pendingreg">
         <div class="mi">🆕</div>
@@ -550,6 +561,14 @@
         <button class="btn btn-primary btn-sm" id="btn-set-end-schedule">Set</button>
         <button class="btn btn-ghost btn-sm" id="btn-clear-end-schedule">Clear</button>
       </div>
+    </div>
+
+    <div class="exam-window-card" id="stuck-card" style="flex-direction:column; align-items:stretch; gap:10px;">
+      <div class="ew-left">
+        <div class="ew-label">Atke hue sessions (jo submit nahi hue)</div>
+        <div class="ew-status" id="stuck-status" style="font-size:12px; font-weight:600;">Loading...</div>
+      </div>
+      <button class="btn btn-sm" id="btn-finalize-stuck">✅ Sabko saved answers se submit karo</button>
     </div>
 
     <div class="stat-bar" id="live-stat-bar"></div>
@@ -1494,7 +1513,26 @@ async function loadAllSelfRegistered(){
   }
 }
 
+async function loadJoinLink(){
+  const card = document.getElementById('join-link-card');
+  try{
+    const r = await rpc('admin_get_join_link', adminCreds());
+    if (r && r.ok && r.link){
+      document.getElementById('join-link-input').value = r.link;
+      card.style.display = 'flex';
+    } else {
+      card.style.display = 'none';
+    }
+  }catch(e){ card.style.display = 'none'; }
+}
+document.getElementById('btn-copy-join-link').addEventListener('click', async () => {
+  const inp = document.getElementById('join-link-input');
+  try{ await navigator.clipboard.writeText(inp.value); toast('Link copy ho gaya. Ise students ko bhej dijiye.', 'ok'); }
+  catch(e){ inp.select(); toast('Link select ho gaya — Ctrl+C dabaiye.'); }
+});
+
 async function loadDashboardStats(){
+  loadJoinLink();
   try{
     const rows = await rpc('admin_get_dashboard_stats', { p_admin_id: admin.adminId, p_admin_pass: admin.adminPass });
     const s = rows && rows[0];
@@ -2559,6 +2597,7 @@ let liveRefreshIntervalId = null;
 let liveLastSnapshot = null;   // JSON string of last-rendered data, used to skip no-op re-renders
 
 function openLiveSection(){
+  loadStuckInfo();
   showView('view-live');
   loadExamWindowStatus();
   liveLastSnapshot = null;
@@ -2678,7 +2717,7 @@ document.getElementById('btn-toggle-window').addEventListener('click', async () 
   if (!confirm(`Are you sure you want to ${label} the exam window? Students will ${newState ? 'be able to' : 'NOT be able to'} start the exam.`)) return;
   try{
     const ok = await rpc('admin_toggle_exam_window', { p_admin_id: admin.adminId, p_admin_pass: admin.adminPass, p_active: newState });
-    if (ok){ examWindowActive = newState; renderWindowStatus(); toast('Exam window updated.', 'ok'); }
+    if (ok){ examWindowActive = newState; renderWindowStatus(); toast('Exam window updated.', 'ok'); loadStuckInfo(); }
     else toast('Unable to update exam window.', 'err');
   }catch(err){ toast('Connection error.', 'err'); }
 });
@@ -3125,6 +3164,45 @@ document.getElementById('btn-reset-student-pw').addEventListener('click', async 
     errEl.textContent = 'Connection error. Please try again.';
   }finally{
     btn.disabled = false; btn.textContent = '🔁 Reset student password';
+  }
+});
+
+/* ---------------- ATKE SESSIONS ---------------- */
+async function loadStuckInfo(){
+  const st = document.getElementById('stuck-status');
+  const btn = document.getElementById('btn-finalize-stuck');
+  try{
+    const r = await rpc('admin_stuck_sessions_info', adminCreds());
+    if (!r || !r.ok){ st.textContent = 'Jaankari nahi mil payi.'; btn.disabled = true; return; }
+    if (r.stuck === 0){
+      st.textContent = 'Koi atka hua session nahi hai. 👍'; btn.disabled = true;
+    } else if (r.window_open){
+      st.textContent = `${r.stuck} session abhi submit nahi hue. Exam window KHULI hai — ho sakta hai students abhi exam de rahe hon. Window band hone ke baad hi ye button chalega.`;
+      btn.disabled = true;
+    } else {
+      st.textContent = `${r.stuck} session atke hue hain (exam window band hai). Inke saved answers se result banaya ja sakta hai.`;
+      btn.disabled = false;
+    }
+  }catch(e){ st.textContent = 'Connection error.'; btn.disabled = true; }
+}
+document.getElementById('btn-finalize-stuck').addEventListener('click', async () => {
+  if (!confirm('Saare atke hue sessions ko unke saved answers ke hisaab se submit kar dein?\n\nUnka result ban jayega aur wo "Submitted" ho jayenge. Ye wapas nahi hoga.')) return;
+  const btn = document.getElementById('btn-finalize-stuck');
+  btn.disabled = true; btn.textContent = 'Submit ho rahe hain...';
+  try{
+    const r = await rpc('admin_finalize_stuck_sessions', adminCreds());
+    if (r && r.ok){
+      toast(`${r.submitted} session submit ho gaye. Results mein dekh sakte hain.`, 'ok');
+    } else if (r && r.error === 'window_open'){
+      toast('Exam window khuli hai — pehle window band kariye.', 'err');
+    } else {
+      toast('Submit nahi ho paaye. Dobara koshish kariye.', 'err');
+    }
+  }catch(e){ toast('Connection error.', 'err'); }
+  finally{
+    btn.textContent = '✅ Sabko saved answers se submit karo';
+    loadStuckInfo();
+    if (typeof loadLiveSessions === 'function') loadLiveSessions(false);
   }
 });
 
