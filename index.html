@@ -53,6 +53,8 @@
 
   input, textarea{width:100%; background:var(--field); color:var(--text); border:1px solid var(--line-soft); border-radius:var(--radius-sm); padding:13px 14px; font-size:15px; font-family:inherit; outline:none;}
   input:focus, textarea:focus{border-color:var(--accent);}
+  select{width:100%; background:var(--field); color:var(--text); border:1px solid var(--line-soft); border-radius:var(--radius-sm); padding:12px 14px; font-size:15px; font-family:inherit; outline:none;}
+  select:focus{border-color:var(--accent);}
   label.field-label{display:block; font-size:11px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; color:var(--text-dim); margin:16px 0 6px;}
   .btn{display:flex; align-items:center; justify-content:center; gap:8px; width:100%; border:none; border-radius:var(--radius-sm); cursor:pointer; font-family:inherit; font-weight:600; font-size:15px; padding:15px;}
   .btn:active{transform:scale(.98);}
@@ -100,6 +102,21 @@
   .reply-form{margin-top:10px; display:none;}
   .reply-form.show{display:block;}
   .reply-form textarea{min-height:80px; margin-bottom:8px;}
+  .sup-item{background:var(--card); border:1px solid var(--line-soft); border-radius:var(--radius); padding:14px 16px; margin-bottom:10px; cursor:pointer;}
+  .sup-item.unread{border-color:var(--accent);}
+  .sup-top{display:flex; gap:8px; align-items:center; flex-wrap:wrap;}
+  .sup-no{font-size:12px; color:var(--text-dim); font-weight:600;}
+  .sup-subj{font-weight:600; margin-top:4px;}
+  .sup-meta{font-size:12px; color:var(--text-dim); margin-top:4px;}
+  .sup-st{font-size:11px; font-weight:700; padding:2px 8px; border-radius:10px; margin-left:auto;}
+  .sup-st.open{background:#3498db33; color:#5dade2;} .sup-st.in_progress{background:#f39c1233; color:#f5b041;}
+  .sup-st.resolved{background:#16a08533; color:#5dcaa5;} .sup-st.closed{background:#7f8c8d33; color:#aab7b8;}
+  .sup-new{background:#e74c3c; color:#fff; font-size:10px; font-weight:700; padding:2px 6px; border-radius:8px;}
+  .sup-msg{border-radius:12px; padding:10px 12px; margin:8px 0; max-width:88%; white-space:pre-wrap; word-wrap:break-word;}
+  .sup-msg.me{background:var(--field); margin-left:auto; border:1px solid var(--line-soft);}
+  .sup-msg.them{background:#16a08522; border:1px solid #16a08555;}
+  .sup-msg .who{font-size:11px; font-weight:700; color:var(--text-dim); margin-bottom:4px;}
+  .sup-msg .when{font-size:11px; color:var(--text-dim); margin-top:6px;}
   .reply-form .row{display:flex; gap:8px;}
 
   .empty-state{text-align:center; padding:50px 10px; color:var(--text-mute); font-size:13.5px;}
@@ -304,6 +321,11 @@
         <div class="mi">➕</div>
         <div class="mt">Add question</div>
         <div class="ms">Add one question directly — with image support for figures/diagrams</div>
+      </div>
+      <div class="menu-card" id="menu-support">
+        <div class="mi">🛟</div>
+        <div class="mt">Help &amp; support <span id="support-badge" style="display:none; background:#e74c3c; color:#fff; font-size:11px; font-weight:700; padding:2px 7px; border-radius:10px; margin-left:4px;"></span></div>
+        <div class="ms">Suggestions, complaints and issues for the platform team</div>
       </div>
       <div class="menu-card" id="menu-messages">
         <div class="mi">📨</div>
@@ -653,6 +675,44 @@
   </div>
 
   <!-- ============ ADMIN CREDENTIALS ============ -->
+  <div class="view" id="view-support">
+    <div class="section-title">Help &amp; support</div>
+    <div class="section-sub">Send a suggestion, complaint or issue to the platform team and follow the replies here. Each request gets a reference number.</div>
+
+    <div id="sup-list-wrap">
+      <details id="sup-new-box" style="margin-bottom:18px;">
+        <summary style="cursor:pointer; font-weight:600; margin-bottom:10px;">➕ New request</summary>
+        <label class="field-label">Category</label>
+        <select id="sup-category">
+          <option value="">Choose a category</option>
+          <option value="suggestion">Suggestion</option>
+          <option value="complaint">Complaint</option>
+          <option value="technical">Technical issue</option>
+          <option value="billing">Billing / subscription</option>
+          <option value="other">Other</option>
+        </select>
+        <label class="field-label">Subject</label>
+        <input id="sup-subject" type="text" maxlength="150" placeholder="A short summary">
+        <label class="field-label">Message</label>
+        <textarea id="sup-message" maxlength="5000" style="min-height:120px;" placeholder="Describe your suggestion or problem in detail"></textarea>
+        <div class="error-text" id="sup-new-error"></div>
+        <button class="btn btn-primary" id="btn-sup-send" style="margin-top:8px;">Submit request</button>
+      </details>
+      <div id="sup-list"><div class="spin"></div></div>
+    </div>
+
+    <div id="sup-thread-wrap" style="display:none;">
+      <a href="#" id="sup-back" style="color:var(--accent-text); text-decoration:none; font-size:13px;">← All requests</a>
+      <div id="sup-thread-head" style="margin:12px 0;"></div>
+      <div id="sup-thread-msgs"></div>
+      <div id="sup-reply-box" style="margin-top:12px;">
+        <textarea id="sup-reply" maxlength="5000" style="min-height:90px;" placeholder="Write a reply"></textarea>
+        <div class="error-text" id="sup-reply-error"></div>
+        <button class="btn btn-primary" id="btn-sup-reply" style="margin-top:8px;">Send reply</button>
+      </div>
+    </div>
+  </div>
+
   <div class="view" id="view-settings">
     <div class="section-title">Admin credentials</div>
     <div class="section-sub">Change your Admin ID and/or password. You'll need to log in again with the new credentials after saving.</div>
@@ -1455,6 +1515,7 @@ document.getElementById('menu-results').addEventListener('click', openResultsSec
 document.getElementById('menu-upload').addEventListener('click', openUploadSection);
 document.getElementById('menu-live').addEventListener('click', openLiveSection);
 document.getElementById('menu-settings').addEventListener('click', openSettingsSection);
+document.getElementById('menu-support').addEventListener('click', openSupportSection);
 document.getElementById('menu-settings').addEventListener('click', async () => {
   const el = document.getElementById('rst-noemail');
   el.style.display = 'none';
@@ -1525,6 +1586,112 @@ async function loadAllSelfRegistered(){
   }
 }
 
+/* ---------------- HELP & SUPPORT ---------------- */
+const SUP_CATEGORY = { suggestion: 'Suggestion', complaint: 'Complaint', technical: 'Technical issue', billing: 'Billing / subscription', other: 'Other' };
+const SUP_STATUS = { open: 'Open', in_progress: 'In progress', resolved: 'Resolved', closed: 'Closed' };
+let supCurrentId = null;
+function supDate(d){ return d ? new Date(d).toLocaleString('en-IN', { day:'numeric', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' }) : ''; }
+async function loadSupportBadge(){
+  const b = document.getElementById('support-badge');
+  try{
+    const n = await rpc('admin_ticket_unread_count', adminCreds());
+    if (n > 0){ b.textContent = n; b.style.display = 'inline-block'; } else { b.style.display = 'none'; }
+  }catch(e){ b.style.display = 'none'; }
+}
+function openSupportSection(){
+  showView('view-support');
+  document.getElementById('sup-thread-wrap').style.display = 'none';
+  document.getElementById('sup-list-wrap').style.display = 'block';
+  loadSupportList();
+}
+async function loadSupportList(){
+  const el = document.getElementById('sup-list');
+  el.innerHTML = '<div class="spin"></div>';
+  try{
+    const r = await rpc('admin_ticket_list', adminCreds());
+    if (!r || !r.ok){ el.innerHTML = '<div class="empty-state">Unable to load requests.</div>'; return; }
+    if (!r.tickets.length){ el.innerHTML = '<div class="empty-state">No requests yet. Use “New request” to contact the platform team.</div>'; return; }
+    el.innerHTML = r.tickets.map(t => `
+      <div class="sup-item ${t.unread ? 'unread' : ''}" data-id="${t.id}">
+        <div class="sup-top">
+          <span class="sup-no">${esc(t.ticket_no)} · ${esc(SUP_CATEGORY[t.category] || t.category)}</span>
+          ${t.unread ? '<span class="sup-new">NEW REPLY</span>' : ''}
+          <span class="sup-st ${esc(t.status)}">${esc(SUP_STATUS[t.status] || t.status)}</span>
+        </div>
+        <div class="sup-subj">${esc(t.subject)}</div>
+        <div class="sup-meta">Last update: ${esc(supDate(t.last_message_at))}</div>
+      </div>`).join('');
+  }catch(e){ el.innerHTML = '<div class="empty-state">Connection error.</div>'; }
+}
+document.getElementById('sup-list').addEventListener('click', (e) => {
+  const item = e.target.closest('.sup-item'); if (!item) return;
+  openSupportThread(Number(item.dataset.id));
+});
+async function openSupportThread(id){
+  supCurrentId = id;
+  document.getElementById('sup-list-wrap').style.display = 'none';
+  document.getElementById('sup-thread-wrap').style.display = 'block';
+  document.getElementById('sup-thread-head').innerHTML = '<div class="spin"></div>';
+  document.getElementById('sup-thread-msgs').innerHTML = '';
+  document.getElementById('sup-reply-error').textContent = '';
+  try{
+    const r = await rpc('admin_ticket_thread', { ...adminCreds(), p_ticket_id: id });
+    if (!r || !r.ok){ document.getElementById('sup-thread-head').innerHTML = '<div class="empty-state">Unable to load this request.</div>'; return; }
+    const t = r.ticket;
+    document.getElementById('sup-thread-head').innerHTML = `
+      <div class="sup-top"><span class="sup-no">${esc(t.ticket_no)} · ${esc(SUP_CATEGORY[t.category] || t.category)}</span>
+      <span class="sup-st ${esc(t.status)}">${esc(SUP_STATUS[t.status] || t.status)}</span></div>
+      <div class="sup-subj" style="font-size:17px;">${esc(t.subject)}</div>
+      <div class="sup-meta">Opened ${esc(supDate(t.created_at))}</div>`;
+    document.getElementById('sup-thread-msgs').innerHTML = r.messages.map(m => `
+      <div class="sup-msg ${m.sender === 'institute' ? 'me' : 'them'}">
+        <div class="who">${m.sender === 'institute' ? 'You' : 'Platform team'}</div>${esc(m.body)}
+        <div class="when">${esc(supDate(m.created_at))}</div>
+      </div>`).join('');
+    const closed = t.status === 'closed';
+    document.getElementById('sup-reply-box').style.display = closed ? 'none' : 'block';
+    if (closed) document.getElementById('sup-thread-msgs').insertAdjacentHTML('beforeend',
+      '<div class="upload-hint">This request is closed. Please create a new request if you need further help.</div>');
+    loadSupportBadge();
+  }catch(e){ document.getElementById('sup-thread-head').innerHTML = '<div class="empty-state">Connection error.</div>'; }
+}
+document.getElementById('sup-back').addEventListener('click', (e) => { e.preventDefault(); openSupportSection(); });
+document.getElementById('btn-sup-send').addEventListener('click', async () => {
+  const errEl = document.getElementById('sup-new-error'); errEl.textContent = '';
+  const category = document.getElementById('sup-category').value;
+  const subject = document.getElementById('sup-subject').value.trim();
+  const message = document.getElementById('sup-message').value.trim();
+  if (!category){ errEl.textContent = 'Please choose a category.'; return; }
+  if (subject.length < 3){ errEl.textContent = 'Please enter a subject (at least 3 characters).'; return; }
+  if (message.length < 5){ errEl.textContent = 'Please describe your request (at least 5 characters).'; return; }
+  const btn = document.getElementById('btn-sup-send'); btn.disabled = true; btn.textContent = 'Submitting...';
+  try{
+    const r = await rpc('admin_ticket_create', { ...adminCreds(), p_category: category, p_subject: subject, p_message: message });
+    if (r && r.ok){
+      toast(`Request submitted. Reference: ${r.ticket_no}`, 'ok');
+      ['sup-subject','sup-message'].forEach(id => document.getElementById(id).value = '');
+      document.getElementById('sup-category').value = '';
+      document.getElementById('sup-new-box').open = false;
+      loadSupportList();
+    } else {
+      errEl.textContent = (r && r.error) || 'Unable to submit your request. Please try again.';
+    }
+  }catch(e){ errEl.textContent = 'Connection error. Please try again.'; }
+  finally{ btn.disabled = false; btn.textContent = 'Submit request'; }
+});
+document.getElementById('btn-sup-reply').addEventListener('click', async () => {
+  const errEl = document.getElementById('sup-reply-error'); errEl.textContent = '';
+  const msg = document.getElementById('sup-reply').value.trim();
+  if (!msg){ errEl.textContent = 'Please write a reply.'; return; }
+  const btn = document.getElementById('btn-sup-reply'); btn.disabled = true; btn.textContent = 'Sending...';
+  try{
+    const r = await rpc('admin_ticket_reply', { ...adminCreds(), p_ticket_id: supCurrentId, p_message: msg });
+    if (r && r.ok){ document.getElementById('sup-reply').value = ''; openSupportThread(supCurrentId); }
+    else errEl.textContent = (r && r.error) || 'Unable to send your reply.';
+  }catch(e){ errEl.textContent = 'Connection error. Please try again.'; }
+  finally{ btn.disabled = false; btn.textContent = 'Send reply'; }
+});
+
 async function loadSubscription(){
   const box = document.getElementById('subscription-banner');
   try{
@@ -1560,6 +1727,7 @@ document.getElementById('btn-copy-join-link').addEventListener('click', async ()
 async function loadDashboardStats(){
   loadJoinLink();
   loadSubscription();
+  loadSupportBadge();
   try{
     const rows = await rpc('admin_get_dashboard_stats', { p_admin_id: admin.adminId, p_admin_pass: admin.adminPass });
     const s = rows && rows[0];
