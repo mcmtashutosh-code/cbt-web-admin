@@ -241,6 +241,13 @@
       <div class="dash-stat-chip"><span class="dash-stat-num" id="stat-shares">—</span><span class="dash-stat-lbl">App shares</span></div>
     </div>
 
+    <div class="exam-window-card" id="subscription-banner" style="display:none; border-color:#f39c12; margin-bottom:14px;">
+      <div class="ew-left">
+        <div class="ew-label">⏳ Subscription notice</div>
+        <div class="ew-status" id="subscription-text" style="font-size:13px; font-weight:500;"></div>
+      </div>
+    </div>
+
     <div class="exam-window-card" id="join-link-card" style="flex-direction:column; align-items:stretch; gap:8px; margin-bottom:18px; display:none;">
       <div class="ew-left">
         <div class="ew-label">🔗 Student registration link</div>
@@ -1395,7 +1402,9 @@ async function doLogin(){
   try{
     const check = await rpc('admin_login_check', { p_admin_id: adminId, p_admin_pass: adminPass });
     if (!check.ok){
-      errEl.textContent = 'Access denied: unauthorized credentials.';
+      errEl.textContent = check.error === 'institute_inactive'
+        ? "Your institute's access is inactive or has expired. Please contact the platform administrator."
+        : 'Access denied: unauthorized credentials.';
       btn.disabled = false; btn.textContent = 'Sign in'; return;
     }
 
@@ -1513,6 +1522,20 @@ async function loadAllSelfRegistered(){
   }
 }
 
+async function loadSubscription(){
+  const box = document.getElementById('subscription-banner');
+  try{
+    const r = await rpc('admin_get_subscription', adminCreds());
+    if (r && r.ok && r.days_left !== null && r.days_left !== undefined && r.days_left <= 15){
+      const d = new Date(r.expires_at).toLocaleDateString('en-IN', { day:'numeric', month:'short', year:'numeric' });
+      document.getElementById('subscription-text').textContent =
+        `Your ${r.plan ? r.plan + ' ' : ''}subscription expires on ${d} (${r.days_left} day${r.days_left === 1 ? '' : 's'} remaining). Please contact the platform administrator to renew and avoid interruption for your students.`;
+      box.style.display = 'flex';
+    } else {
+      box.style.display = 'none';
+    }
+  }catch(e){ box.style.display = 'none'; }
+}
 async function loadJoinLink(){
   const card = document.getElementById('join-link-card');
   try{
@@ -1533,6 +1556,7 @@ document.getElementById('btn-copy-join-link').addEventListener('click', async ()
 
 async function loadDashboardStats(){
   loadJoinLink();
+  loadSubscription();
   try{
     const rows = await rpc('admin_get_dashboard_stats', { p_admin_id: admin.adminId, p_admin_pass: admin.adminPass });
     const s = rows && rows[0];
@@ -3167,7 +3191,7 @@ document.getElementById('btn-reset-student-pw').addEventListener('click', async 
   }
 });
 
-/* ---------------- ATKE SESSIONS ---------------- */
+/* ---------------- UNSUBMITTED SESSIONS ---------------- */
 async function loadStuckInfo(){
   const st = document.getElementById('stuck-status');
   const btn = document.getElementById('btn-finalize-stuck');
