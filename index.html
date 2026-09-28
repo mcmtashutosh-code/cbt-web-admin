@@ -243,8 +243,8 @@
 
     <div class="exam-window-card" id="join-link-card" style="flex-direction:column; align-items:stretch; gap:8px; margin-bottom:18px; display:none;">
       <div class="ew-left">
-        <div class="ew-label">🔗 Aapke students ka registration link</div>
-        <div class="ew-status" style="font-size:12px; font-weight:500;">Naye students isi link se register karein. Registration ke baad unhe "Pending registrations" mein approve kariye.</div>
+        <div class="ew-label">🔗 Student registration link</div>
+        <div class="ew-status" style="font-size:12px; font-weight:500;">Share this link with your students to register. New registrations appear under "Pending registrations" for approval.</div>
       </div>
       <div style="display:flex; gap:8px; align-items:center;">
         <input id="join-link-input" readonly style="flex:1; min-width:0; font-size:12px;">
@@ -286,7 +286,7 @@
       <div class="menu-card" id="menu-settings">
         <div class="mi">🔑</div>
         <div class="mt">Passwords</div>
-        <div class="ms">Change admin login &amp; reset a student's password</div>
+        <div class="ms">Change admin login &amp; reset student passwords</div>
       </div>
       <div class="menu-card" id="menu-findfix">
         <div class="mi">🔍</div>
@@ -565,10 +565,10 @@
 
     <div class="exam-window-card" id="stuck-card" style="flex-direction:column; align-items:stretch; gap:10px;">
       <div class="ew-left">
-        <div class="ew-label">Atke hue sessions (jo submit nahi hue)</div>
+        <div class="ew-label">Unsubmitted exam sessions</div>
         <div class="ew-status" id="stuck-status" style="font-size:12px; font-weight:600;">Loading...</div>
       </div>
-      <button class="btn btn-sm" id="btn-finalize-stuck">✅ Sabko saved answers se submit karo</button>
+      <button class="btn btn-sm" id="btn-finalize-stuck">✅ Submit all using saved answers</button>
     </div>
 
     <div class="stat-bar" id="live-stat-bar"></div>
@@ -668,7 +668,7 @@
     <button class="btn btn-primary" id="btn-update-creds" style="margin:10px 0 22px;">🔑 Update credentials</button>
 
     <div class="section-title" style="margin-top:26px;">Reset a student's password</div>
-    <div class="section-sub">Agar koi student apna password bhool gaya hai, to yahan uska naya password set kariye aur student ko bata dijiye. Student login ke baad ise badal sakta hai. (Passwords ab surakshit hain — kisi ko dikhte nahi.)</div>
+    <div class="section-sub">If a student has forgotten their password, set a new one here and share it with them. They can change it after signing in. Passwords are stored securely and cannot be viewed.</div>
 
     <div class="upload-hint" id="rst-noemail" style="display:none;"></div>
 
@@ -1113,7 +1113,7 @@ async function rpc(fn, body){
   return res.json();
 }
 
-/* Multi-tenant: paged RPC read (set-returning functions, 1000 rows per page) */
+/* Paged RPC read for set-returning functions (1000 rows per page) */
 async function rpcGetAll(fn, body){
   const pageSize = 1000;
   let all = [];
@@ -1449,7 +1449,7 @@ document.getElementById('menu-settings').addEventListener('click', async () => {
   try{
     const n = await rpc('admin_count_students_without_email', adminCreds());
     if (typeof n === 'number' && n > 0){
-      el.textContent = `ℹ️ ${n} student(s) ki email registered nahi hai — ye "Forgot password" (email OTP) use nahi kar payenge. Password bhoolne par unka reset yahan se kariye, aur unhe My Profile mein email jodne ko kahiye.`;
+      el.textContent = `ℹ️ ${n} student(s) have no email address on file and cannot use self-service password reset. Reset their passwords here if needed, and ask them to add an email address under My Profile.`;
       el.style.display = 'block';
     }
   }catch(e){ /* ignore */ }
@@ -1527,8 +1527,8 @@ async function loadJoinLink(){
 }
 document.getElementById('btn-copy-join-link').addEventListener('click', async () => {
   const inp = document.getElementById('join-link-input');
-  try{ await navigator.clipboard.writeText(inp.value); toast('Link copy ho gaya. Ise students ko bhej dijiye.', 'ok'); }
-  catch(e){ inp.select(); toast('Link select ho gaya — Ctrl+C dabaiye.'); }
+  try{ await navigator.clipboard.writeText(inp.value); toast('Link copied to clipboard.', 'ok'); }
+  catch(e){ inp.select(); toast('Link selected. Press Ctrl+C to copy.'); }
 });
 
 async function loadDashboardStats(){
@@ -3173,34 +3173,34 @@ async function loadStuckInfo(){
   const btn = document.getElementById('btn-finalize-stuck');
   try{
     const r = await rpc('admin_stuck_sessions_info', adminCreds());
-    if (!r || !r.ok){ st.textContent = 'Jaankari nahi mil payi.'; btn.disabled = true; return; }
+    if (!r || !r.ok){ st.textContent = 'Unable to load session information.'; btn.disabled = true; return; }
     if (r.stuck === 0){
-      st.textContent = 'Koi atka hua session nahi hai. 👍'; btn.disabled = true;
+      st.textContent = 'There are no unsubmitted sessions.'; btn.disabled = true;
     } else if (r.window_open){
-      st.textContent = `${r.stuck} session abhi submit nahi hue. Exam window KHULI hai — ho sakta hai students abhi exam de rahe hon. Window band hone ke baad hi ye button chalega.`;
+      st.textContent = `${r.stuck} session(s) not yet submitted. The exam window is currently open and students may still be taking the exam. This action is available once the window is closed.`;
       btn.disabled = true;
     } else {
-      st.textContent = `${r.stuck} session atke hue hain (exam window band hai). Inke saved answers se result banaya ja sakta hai.`;
+      st.textContent = `${r.stuck} session(s) were not submitted. The exam window is closed, so results can be generated from their saved answers.`;
       btn.disabled = false;
     }
   }catch(e){ st.textContent = 'Connection error.'; btn.disabled = true; }
 }
 document.getElementById('btn-finalize-stuck').addEventListener('click', async () => {
-  if (!confirm('Saare atke hue sessions ko unke saved answers ke hisaab se submit kar dein?\n\nUnka result ban jayega aur wo "Submitted" ho jayenge. Ye wapas nahi hoga.')) return;
+  if (!confirm('Submit all unsubmitted sessions using their saved answers?\n\nResults will be generated and the sessions will be marked as Submitted. This action cannot be undone.')) return;
   const btn = document.getElementById('btn-finalize-stuck');
-  btn.disabled = true; btn.textContent = 'Submit ho rahe hain...';
+  btn.disabled = true; btn.textContent = 'Submitting...';
   try{
     const r = await rpc('admin_finalize_stuck_sessions', adminCreds());
     if (r && r.ok){
-      toast(`${r.submitted} session submit ho gaye. Results mein dekh sakte hain.`, 'ok');
+      toast(`${r.submitted} session(s) submitted. Results are now available.`, 'ok');
     } else if (r && r.error === 'window_open'){
-      toast('Exam window khuli hai — pehle window band kariye.', 'err');
+      toast('The exam window is open. Please close it first.', 'err');
     } else {
-      toast('Submit nahi ho paaye. Dobara koshish kariye.', 'err');
+      toast('Unable to submit sessions. Please try again.', 'err');
     }
   }catch(e){ toast('Connection error.', 'err'); }
   finally{
-    btn.textContent = '✅ Sabko saved answers se submit karo';
+    btn.textContent = '✅ Submit all using saved answers';
     loadStuckInfo();
     if (typeof loadLiveSessions === 'function') loadLiveSessions(false);
   }
