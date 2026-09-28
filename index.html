@@ -2146,8 +2146,8 @@ async function loadExamResults(){
   }
 }
 
-/* ---------------- SHAREABLE RESULTS PDF (masked mobile numbers) ---------------- */
-function maskMobile(m){
+/* ---------------- SHAREABLE RESULTS (masked mobile numbers: first 2 + last 3) ---------------- */
+function maskMobileShare(m){
   const d = String(m || '');
   if (d.length <= 5) return d;
   return d.slice(0, 2) + '*'.repeat(d.length - 5) + d.slice(-3);
@@ -2171,7 +2171,7 @@ document.getElementById('btn-export-exam-pdf').addEventListener('click', () => {
     return `<tr>
       <td class="c">${rank}</td>
       <td>${esc(x.r.name || '')}</td>
-      <td class="c mono">${esc(maskMobile(x.r.mobile))}</td>
+      <td class="c mono">${esc(maskMobileShare(x.r.mobile))}</td>
       <td class="c">${x.r.correct || 0}</td>
       <td class="c">${x.r.wrong || 0}</td>
       <td class="c b">${marks}</td>
@@ -2254,7 +2254,7 @@ document.getElementById('btn-export-exam-results').addEventListener('click', asy
     const now = new Date();
     const pad = n => String(n).padStart(2, '0');
     const genStr = `Generated on: ${pad(now.getDate())}-${pad(now.getMonth()+1)}-${now.getFullYear()} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
-    genCell.value = genStr;
+    genCell.value = genStr + '   ·   Mobile numbers are partially hidden for privacy';
     genCell.font = { italic: true, color: { argb: 'FF888888' } };
     genCell.alignment = { horizontal: 'center' };
 
@@ -2273,7 +2273,7 @@ document.getElementById('btn-export-exam-results').addEventListener('click', asy
       const { pct, status } = computeExamStatus(row);
       if (status === 'PASS') passCount++; else failCount++;
       const r = sheet.getRow(rowIdx);
-      r.values = [row.mobile, row.name, row.total_q || 0, row.correct || 0, row.wrong || 0, row.final_marks || 0, `${pct}%`, status];
+      r.values = [maskMobileShare(row.mobile), row.name, row.total_q || 0, row.correct || 0, row.wrong || 0, row.final_marks || 0, `${pct}%`, status];
       const fillColor = status === 'PASS' ? 'FFE9F7EC' : 'FFFCEAEA';
       r.eachCell(cell => { cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: fillColor } }; });
       r.getCell(1).alignment = { horizontal: 'center' };
@@ -2291,7 +2291,7 @@ document.getElementById('btn-export-exam-results').addEventListener('click', asy
     rowIdx++;
     sheet.mergeCells(`A${rowIdx}:H${rowIdx}`);
     const footerCell = sheet.getCell(`A${rowIdx}`);
-    footerCell.value = `Total Submitted: ${lastExamResultsRows.length}    |    PASS: ${passCount}    |    FAIL: ${failCount}`;
+    footerCell.value = `Total Submitted: ${lastExamResultsRows.length}    |    PASS: ${passCount}    |    FAIL: ${failCount}    |    Mobile numbers are partially hidden for privacy`;
     footerCell.font = { bold: true };
     footerCell.alignment = { horizontal: 'center' };
     footerCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF1F4F9' } };
