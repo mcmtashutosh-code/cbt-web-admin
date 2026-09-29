@@ -1692,11 +1692,28 @@ document.getElementById('hist-list').addEventListener('click', async (e) => {
     histRows = r.rows || []; histConfig = r.config || null;
     if (!histRows.length){ rowsEl.innerHTML = '<div class="empty-state">No results for this exam.</div>'; return; }
     rowsEl.innerHTML = '<div style="overflow-x:auto;"><table style="width:100%; border-collapse:collapse; font-size:13px;">' +
-      '<tr style="color:var(--text-dim); text-align:left;"><th style="padding:6px;">#</th><th>Name</th><th>Mobile</th><th>Correct</th><th>Wrong</th><th>Marks</th><th>Result</th></tr>' +
-      histRows.map((x, i) => `<tr style="border-top:1px solid var(--line-soft);"><td style="padding:6px;">${i + 1}</td><td>${esc(x.name || '')}</td><td>${esc(maskMobileShare(x.mobile))}</td><td>${x.correct ?? 0}</td><td>${x.wrong ?? 0}</td><td><b>${x.final_marks ?? 0}</b></td><td style="color:${x.exam_status === 'PASS' ? '#5dcaa5' : '#ff8a7d'}; font-weight:700;">${esc(x.exam_status || '')}</td></tr>`).join('') +
+      '<tr style="color:var(--text-dim); text-align:left;"><th style="padding:6px;">#</th><th>Name</th><th>Mobile</th><th>Correct</th><th>Wrong</th><th>Marks</th><th>Result</th><th></th></tr>' +
+      histRows.map((x, i) => `<tr style="border-top:1px solid var(--line-soft);"><td style="padding:6px;">${i + 1}</td><td>${esc(x.name || '')}</td><td>${esc(maskMobileShare(x.mobile))}</td><td>${x.correct ?? 0}</td><td>${x.wrong ?? 0}</td><td><b>${x.final_marks ?? 0}</b></td><td style="color:${x.exam_status === 'PASS' ? '#5dcaa5' : '#ff8a7d'}; font-weight:700;">${esc(x.exam_status || '')}</td><td><button class="btn btn-danger btn-sm hist-del" data-idx="${i}" title="Delete this result">🗑</button></td></tr>`).join('') +
       '</table></div>';
     box.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }catch(err){ rowsEl.innerHTML = '<div class="empty-state">Connection error.</div>'; }
+});
+document.getElementById('hist-rows').addEventListener('click', async (e) => {
+  const b = e.target.closest('.hist-del'); if (!b || !histCurrent) return;
+  const row = histRows[Number(b.dataset.idx)]; if (!row) return;
+  if (!confirm(`Delete the result of ${row.name || 'this student'} (${maskMobileShare(row.mobile)}) from "${histCurrent.title}"?\n\nThis cannot be undone. Your live-test usage is not affected.`)) return;
+  b.disabled = true;
+  try{
+    const r = await rpc('admin_delete_history_result', { ...adminCreds(), p_exam_id: histCurrent.id, p_mobile: row.mobile });
+    if (r && r.ok){
+      toast('Result deleted.', 'ok');
+      const item = document.querySelector(`#hist-list .sup-item[data-id="${histCurrent.id}"]`);
+      if (item) item.click();
+      loadHistoryList();
+    } else {
+      toast((r && r.error) || 'Unable to delete this result.', 'err'); b.disabled = false;
+    }
+  }catch(err){ toast('Connection error.', 'err'); b.disabled = false; }
 });
 function withHistoryContext(fn){
   const r0 = lastExamResultsRows, c0 = examConfig, t0 = window.__exportTitle;
