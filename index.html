@@ -265,6 +265,15 @@
       </div>
     </div>
 
+    <div class="exam-window-card" id="plan-card" style="display:none; flex-direction:column; align-items:stretch; gap:10px; margin-bottom:14px;">
+      <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap;">
+        <div class="ew-label" style="font-size:15px;">📋 My plan: <span id="plan-name" style="color:var(--accent-text);"></span></div>
+        <span id="plan-days-pill" style="font-size:12px; font-weight:700; padding:3px 10px; border-radius:12px;"></span>
+      </div>
+      <div id="plan-rows" style="display:flex; flex-direction:column; gap:10px;"></div>
+      <div style="font-size:12px; color:var(--text-dim);">To renew or upgrade your plan, contact the platform administrator through <b>Help &amp; support</b>.</div>
+    </div>
+
     <div class="exam-window-card" id="quota-card" style="display:none; margin-bottom:14px;">
       <div class="ew-left">
         <div class="ew-label">🧪 Live tests this billing cycle</div>
@@ -1668,8 +1677,56 @@ async function askNewExamTitle(){
   if (t === null) return null;
   return t.trim() || def;
 }
+function planBar(label, value, pct, warn){
+  const color = pct >= 100 ? '#e74c3c' : (warn ? '#f39c12' : 'var(--accent)');
+  return `<div><div style="display:flex; justify-content:space-between; font-size:13px; margin-bottom:5px;"><span style="color:var(--text-dim);">${label}</span><span style="font-weight:600;">${value}</span></div>
+    <div style="height:7px; background:var(--field); border-radius:5px; overflow:hidden;"><div style="height:100%; width:${Math.max(0, Math.min(100, pct))}%; background:${color}; border-radius:5px;"></div></div></div>`;
+}
+async function loadPlanCard(){
+  const card = document.getElementById('plan-card');
+  try{
+    const r = await rpc('admin_get_plan_overview', adminCreds());
+    if (!r || !r.ok){ card.style.display = 'none'; return; }
+    const pill = document.getElementById('plan-days-pill');
+    const rows = [];
+    document.getElementById('plan-name').textContent = r.is_main ? 'Main institute' : (r.plan || 'free');
+    if (r.end_date){
+      const pct = r.days_total ? (r.days_used * 100 / r.days_total) : 0;
+      rows.push(planBar(`Validity: ${fmtDay(r.start_date)} – ${fmtDay(r.end_date)}`,
+        `${r.days_used} of ${r.days_total} days used · ${r.days_left} left`, pct, r.days_left <= 15));
+      pill.textContent = r.days_left > 0 ? `${r.days_left} day${r.days_left === 1 ? '' : 's'} left` : 'Ends today';
+      pill.style.background = r.days_left <= 15 ? '#e74c3c33' : '#16a08533';
+      pill.style.color = r.days_left <= 15 ? '#ff8a7d' : '#5dcaa5';
+    } else {
+      rows.push(`<div style="font-size:13px; color:var(--text-dim);">Validity: <b style="color:var(--text);">No expiry</b></div>`);
+      pill.textContent = 'Active'; pill.style.background = '#16a08533'; pill.style.color = '#5dcaa5';
+    }
+    if (r.max_students !== null && r.max_students !== undefined){
+      const pct = r.max_students ? (r.students * 100 / r.max_students) : 100;
+      rows.push(planBar('Students', `${r.students} of ${r.max_students}`, pct, pct >= 90));
+    } else {
+      rows.push(`<div style="font-size:13px; color:var(--text-dim);">Students: <b style="color:var(--text);">${r.students}</b> (no limit)</div>`);
+    }
+    const q = r.quota || {};
+    if (q.limit !== null && q.limit !== undefined){
+      const total = q.limit + (q.extra || 0);
+      const pct = total ? (q.used * 100 / total) : 100;
+      rows.push(planBar(`Live tests this month (resets ${fmtDay(addDayIso(q.cycle_end))})`,
+        `${q.used} of ${total} used · ${q.remaining} left`, pct, q.remaining <= 1));
+    } else {
+      rows.push(`<div style="font-size:13px; color:var(--text-dim);">Live tests: <b style="color:var(--text);">Unlimited</b></div>`);
+    }
+    document.getElementById('plan-rows').innerHTML = rows.join('');
+    card.style.display = 'flex';
+  }catch(e){ card.style.display = 'none'; }
+}
+function addDayIso(d){ if (!d) return d; const t = new Date(d + 'T00:00:00Z'); t.setUTCDate(t.getUTCDate() + 1); return t.toISOString().slice(0, 10); }
 async function loadQuotaCard(){
+  /* The live-test figures now live inside "My plan" */
+  loadPlanCard();
   const card = document.getElementById('quota-card');
+  card.style.display = 'none';
+  return;
   try{
     const q = await rpc('admin_get_quota', adminCreds());
     if (q && q.ok && q.limit !== null && q.limit !== undefined){
