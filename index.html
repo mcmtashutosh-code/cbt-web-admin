@@ -265,6 +265,13 @@
       </div>
     </div>
 
+    <div class="exam-window-card" id="quota-card" style="display:none; margin-bottom:14px;">
+      <div class="ew-left">
+        <div class="ew-label">🧪 Live tests this billing cycle</div>
+        <div class="ew-status" id="quota-text" style="font-size:13px; font-weight:500;"></div>
+      </div>
+    </div>
+
     <div class="exam-window-card" id="join-link-card" style="flex-direction:column; align-items:stretch; gap:8px; margin-bottom:18px; display:none;">
       <div class="ew-left">
         <div class="ew-label">🔗 Student registration link</div>
@@ -321,6 +328,11 @@
         <div class="mi">➕</div>
         <div class="mt">Add question</div>
         <div class="ms">Add one question directly — with image support for figures/diagrams</div>
+      </div>
+      <div class="menu-card" id="menu-history">
+        <div class="mi">📚</div>
+        <div class="mt">Exam history</div>
+        <div class="ms">Past exams, results and student progress</div>
       </div>
       <div class="menu-card" id="menu-support">
         <div class="mi">🛟</div>
@@ -675,6 +687,30 @@
   </div>
 
   <!-- ============ ADMIN CREDENTIALS ============ -->
+  <div class="view" id="view-history">
+    <div class="section-title">Exam history</div>
+    <div class="section-sub">Every live exam is kept here with its results. Starting a new exam saves the current one automatically.</div>
+    <div id="hist-list"><div class="spin"></div></div>
+
+    <div id="hist-detail" style="display:none; margin-top:18px;">
+      <div class="section-title" id="hist-detail-title" style="font-size:17px;"></div>
+      <div style="display:flex; gap:8px; flex-wrap:wrap; margin:8px 0 12px;">
+        <button class="btn btn-primary btn-sm" id="btn-hist-excel">📊 Excel</button>
+        <button class="btn btn-sm" id="btn-hist-pdf">📄 PDF (for sharing)</button>
+        <button class="btn btn-sm" id="btn-hist-rename">✏️ Rename</button>
+      </div>
+      <div id="hist-rows"></div>
+    </div>
+
+    <div class="section-title" style="margin-top:26px; font-size:17px;">Student progress</div>
+    <div class="section-sub">Enter a student's mobile number to see their marks across all exams.</div>
+    <div style="display:flex; gap:8px;">
+      <input id="hist-mobile" type="tel" inputmode="numeric" maxlength="10" placeholder="Student mobile number">
+      <button class="btn btn-primary btn-sm" id="btn-hist-student" style="flex:none;">Show</button>
+    </div>
+    <div id="hist-student" style="margin-top:10px;"></div>
+  </div>
+
   <div class="view" id="view-support">
     <div class="section-title">Help &amp; support</div>
     <div class="section-sub">Send a suggestion, complaint or issue to the platform team and follow the replies here. Each request gets a reference number.</div>
@@ -1384,21 +1420,24 @@ document.getElementById('btn-build-exam').addEventListener('click', async () => 
   if (!confirm(
     `This will:\n\n` +
     `• Replace the current exam paper with ${totalQ} question(s) from your Practice bank\n` +
-    `• Permanently clear ALL previous live sessions and submitted results\n` +
+    `• Save the current exam's results to Exam history, then clear live sessions\n` +
     `• Let every student attempt this new exam fresh\n\n` +
     `Continue?`
   )) return;
   const typed = prompt('To confirm, type GENERATE (in capitals):');
   if (typed !== 'GENERATE'){ statusEl.textContent = 'Cancelled.'; return; }
+  const examTitle = await askNewExamTitle();
+  if (examTitle === null){ statusEl.textContent = 'Cancelled.'; return; }
 
   const btn = document.getElementById('btn-build-exam');
   btn.disabled = true; btn.textContent = 'Generating...';
   try{
     const result = await rpc('admin_build_exam_from_practice', {
-      p_admin_id: admin.adminId, p_admin_pass: admin.adminPass, p_selections: selections
+      p_admin_id: admin.adminId, p_admin_pass: admin.adminPass, p_selections: selections, p_title: examTitle
     });
     if (result && result.ok){
-      toast(`Exam generated: ${result.questions_inserted} question(s). Cleared ${result.sessions_deleted} session(s) and ${result.results_deleted} old result(s).`, 'ok');
+      toast(`Exam "${examTitle}" generated with ${result.questions_inserted} question(s). Previous results were saved to Exam history.`, 'ok');
+      loadQuotaCard();
       examBuildSelections = {};
       document.getElementById('eb-subject-select').value = '';
       renderExamBuildTopicsForSubject('');
@@ -1516,6 +1555,7 @@ document.getElementById('menu-upload').addEventListener('click', openUploadSecti
 document.getElementById('menu-live').addEventListener('click', openLiveSection);
 document.getElementById('menu-settings').addEventListener('click', openSettingsSection);
 document.getElementById('menu-support').addEventListener('click', openSupportSection);
+document.getElementById('menu-history').addEventListener('click', openHistorySection);
 document.getElementById('menu-settings').addEventListener('click', async () => {
   const el = document.getElementById('rst-noemail');
   el.style.display = 'none';
@@ -1585,6 +1625,120 @@ async function loadAllSelfRegistered(){
     list.innerHTML = `<div class="empty-state">Unable to load list.<br><span style="color:#e74c3c; font-size:11px;">${esc(err.message||'')}</span></div>`;
   }
 }
+
+/* ---------------- LIVE-TEST QUOTA + EXAM HISTORY ---------------- */
+function fmtDay(d){ return d ? new Date(d).toLocaleDateString('en-IN', { day:'numeric', month:'short', year:'numeric' }) : '—'; }
+async function askNewExamTitle(){
+  let q = null;
+  try{ q = await rpc('admin_get_quota', adminCreds()); }catch(e){}
+  if (q && q.ok && q.remaining !== null && q.remaining !== undefined && q.remaining <= 0){
+    if (!confirm(`All ${q.limit + (q.extra || 0)} live tests for this billing cycle have been used (cycle ends ${fmtDay(q.cycle_end)}).\n\nYou can prepare the new exam, but students will not be able to start it until more tests are added. Continue?`)) return null;
+  }
+  const def = 'Exam — ' + new Date().toLocaleDateString('en-IN', { day:'numeric', month:'short', year:'numeric' });
+  const t = prompt('Name this exam (shown in Exam history), e.g. "SSC Mock Test 5":', def);
+  if (t === null) return null;
+  return t.trim() || def;
+}
+async function loadQuotaCard(){
+  const card = document.getElementById('quota-card');
+  try{
+    const q = await rpc('admin_get_quota', adminCreds());
+    if (q && q.ok && q.limit !== null && q.limit !== undefined){
+      const total = q.limit + (q.extra || 0);
+      document.getElementById('quota-text').textContent =
+        `${q.used} of ${total} used · ${q.remaining} remaining · cycle ${fmtDay(q.cycle_start)} – ${fmtDay(q.cycle_end)}. A test is counted when the first student starts it; unused tests expire at the end of the cycle.`;
+      card.style.borderColor = q.remaining <= 0 ? '#e74c3c' : '';
+      card.style.display = 'flex';
+    } else {
+      card.style.display = 'none';
+    }
+  }catch(e){ card.style.display = 'none'; }
+}
+let histExams = [], histCurrent = null, histRows = [], histConfig = null;
+function openHistorySection(){
+  showView('view-history');
+  document.getElementById('hist-detail').style.display = 'none';
+  document.getElementById('hist-student').innerHTML = '';
+  loadHistoryList();
+}
+async function loadHistoryList(){
+  const el = document.getElementById('hist-list');
+  el.innerHTML = '<div class="spin"></div>';
+  try{
+    const r = await rpc('admin_exam_history', adminCreds());
+    if (!r || !r.ok){ el.innerHTML = '<div class="empty-state">Unable to load exam history.</div>'; return; }
+    histExams = r.exams || [];
+    if (!histExams.length){ el.innerHTML = '<div class="empty-state">No exams yet.</div>'; return; }
+    el.innerHTML = histExams.map(x => {
+      const pass = x.students ? Math.round((x.passed || 0) * 100 / x.students) : 0;
+      return `<div class="sup-item" data-id="${x.id}">
+        <div class="sup-top"><span class="sup-no">${x.is_current ? 'Current exam' : 'Archived ' + esc(fmtDay(x.archived_at))}</span>
+          <span class="sup-st ${x.is_current ? 'open' : 'resolved'}">${x.is_current ? 'CURRENT' : 'ARCHIVED'}</span></div>
+        <div class="sup-subj">${esc(x.title)}</div>
+        <div class="sup-meta">${x.started_at ? 'Held ' + esc(fmtDay(x.started_at)) + ' · ' : 'Not started yet · '}${x.question_count ?? 0} questions · ${x.students ?? 0} students · ${x.students ? pass + '% passed · avg ' + (x.avg_marks ?? 0) + ' marks' : 'no results'}</div>
+      </div>`; }).join('');
+  }catch(e){ el.innerHTML = '<div class="empty-state">Connection error.</div>'; }
+}
+document.getElementById('hist-list').addEventListener('click', async (e) => {
+  const item = e.target.closest('.sup-item'); if (!item) return;
+  const id = Number(item.dataset.id);
+  histCurrent = histExams.find(x => x.id === id);
+  const box = document.getElementById('hist-detail'), rowsEl = document.getElementById('hist-rows');
+  box.style.display = 'block'; rowsEl.innerHTML = '<div class="spin"></div>';
+  document.getElementById('hist-detail-title').textContent = histCurrent ? histCurrent.title : '';
+  try{
+    const r = await rpc('admin_exam_history_results', { ...adminCreds(), p_exam_id: id });
+    if (!r || !r.ok){ rowsEl.innerHTML = '<div class="empty-state">Unable to load results.</div>'; return; }
+    histRows = r.rows || []; histConfig = r.config || null;
+    if (!histRows.length){ rowsEl.innerHTML = '<div class="empty-state">No results for this exam.</div>'; return; }
+    rowsEl.innerHTML = '<div style="overflow-x:auto;"><table style="width:100%; border-collapse:collapse; font-size:13px;">' +
+      '<tr style="color:var(--text-dim); text-align:left;"><th style="padding:6px;">#</th><th>Name</th><th>Mobile</th><th>Correct</th><th>Wrong</th><th>Marks</th><th>Result</th></tr>' +
+      histRows.map((x, i) => `<tr style="border-top:1px solid var(--line-soft);"><td style="padding:6px;">${i + 1}</td><td>${esc(x.name || '')}</td><td>${esc(maskMobileShare(x.mobile))}</td><td>${x.correct ?? 0}</td><td>${x.wrong ?? 0}</td><td><b>${x.final_marks ?? 0}</b></td><td style="color:${x.exam_status === 'PASS' ? '#5dcaa5' : '#ff8a7d'}; font-weight:700;">${esc(x.exam_status || '')}</td></tr>`).join('') +
+      '</table></div>';
+    box.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }catch(err){ rowsEl.innerHTML = '<div class="empty-state">Connection error.</div>'; }
+});
+function withHistoryContext(fn){
+  const r0 = lastExamResultsRows, c0 = examConfig, t0 = window.__exportTitle;
+  lastExamResultsRows = histRows;
+  if (histConfig) examConfig = Object.assign({}, c0, histConfig);
+  window.__exportTitle = histCurrent ? histCurrent.title : '';
+  try{ fn(); } finally { lastExamResultsRows = r0; examConfig = c0; window.__exportTitle = t0; }
+}
+document.getElementById('btn-hist-excel').addEventListener('click', () => {
+  if (!histRows.length){ toast('No results to export.', 'err'); return; }
+  withHistoryContext(() => document.getElementById('btn-export-exam-results').click());
+});
+document.getElementById('btn-hist-pdf').addEventListener('click', () => {
+  if (!histRows.length){ toast('No results to export.', 'err'); return; }
+  withHistoryContext(() => document.getElementById('btn-export-exam-pdf').click());
+});
+document.getElementById('btn-hist-rename').addEventListener('click', async () => {
+  if (!histCurrent) return;
+  const t = prompt('New name for this exam:', histCurrent.title);
+  if (t === null || !t.trim()) return;
+  try{
+    const r = await rpc('admin_rename_exam', { ...adminCreds(), p_exam_id: histCurrent.id, p_title: t.trim() });
+    if (r && r.ok){ toast('Exam renamed.', 'ok'); histCurrent.title = t.trim(); document.getElementById('hist-detail-title').textContent = t.trim(); loadHistoryList(); }
+    else toast((r && r.error) || 'Unable to rename.', 'err');
+  }catch(e){ toast('Connection error.', 'err'); }
+});
+document.getElementById('btn-hist-student').addEventListener('click', async () => {
+  const m = document.getElementById('hist-mobile').value.trim();
+  const el = document.getElementById('hist-student');
+  if (!/^\d{10}$/.test(m)){ el.innerHTML = '<div class="error-text">Please enter a valid 10-digit mobile number.</div>'; return; }
+  el.innerHTML = '<div class="spin"></div>';
+  try{
+    const r = await rpc('admin_student_exam_trend', { ...adminCreds(), p_mobile: m });
+    if (!r || !r.ok){ el.innerHTML = '<div class="empty-state">Unable to load.</div>'; return; }
+    if (!r.rows.length){ el.innerHTML = `<div class="empty-state">${r.name ? esc(r.name) + ' has' : 'This student has'} no exam results yet.</div>`; return; }
+    el.innerHTML = `<div style="font-weight:600; margin-bottom:6px;">${esc(r.name || m)}</div>` +
+      '<div style="overflow-x:auto;"><table style="width:100%; border-collapse:collapse; font-size:13px;">' +
+      '<tr style="color:var(--text-dim); text-align:left;"><th style="padding:6px;">Exam</th><th>Date</th><th>Correct</th><th>Marks</th><th>Result</th></tr>' +
+      r.rows.map(x => `<tr style="border-top:1px solid var(--line-soft);"><td style="padding:6px;">${esc(x.exam)}</td><td>${esc(fmtDay(x.submitted_at))}</td><td>${x.correct ?? 0}/${x.total_q ?? 0}</td><td><b>${x.final_marks ?? 0}</b></td><td style="color:${x.exam_status === 'PASS' ? '#5dcaa5' : '#ff8a7d'}; font-weight:700;">${esc(x.exam_status || '')}</td></tr>`).join('') +
+      '</table></div>';
+  }catch(e){ el.innerHTML = '<div class="empty-state">Connection error.</div>'; }
+});
 
 /* ---------------- HELP & SUPPORT ---------------- */
 const SUP_CATEGORY = { suggestion: 'Suggestion', complaint: 'Complaint', technical: 'Technical issue', billing: 'Billing / subscription', other: 'Other' };
@@ -1728,6 +1882,7 @@ async function loadDashboardStats(){
   loadJoinLink();
   loadSubscription();
   loadSupportBadge();
+  loadQuotaCard();
   try{
     const rows = await rpc('admin_get_dashboard_stats', { p_admin_id: admin.adminId, p_admin_pass: admin.adminPass });
     const s = rows && rows[0];
@@ -2321,6 +2476,7 @@ function maskMobileShare(m){
   return d.slice(0, 2) + '*'.repeat(d.length - 5) + d.slice(-3);
 }
 document.getElementById('btn-export-exam-pdf').addEventListener('click', () => {
+  const exportTitle = window.__exportTitle || '';
   if (!lastExamResultsRows.length){
     toast('No results to export yet.', 'err');
     return;
@@ -2369,7 +2525,7 @@ document.getElementById('btn-export-exam-pdf').addEventListener('click', () => {
       .foot { margin-top: 14px; font-size: 10.5px; color: #888; }
       tr { page-break-inside: avoid; }
     </style></head><body>
-      <h1>${esc(inst || 'Institute')} — Live Examination Results</h1>
+      <h1>${esc(inst || 'Institute')} — ${esc(exportTitle || 'Live Examination Results')}</h1>
       <div class="sub">Generated on ${esc(dateStr)} · CBT Examination Platform</div>
       <div class="sum">
         <div>Students: <b>${list.length}</b></div>
@@ -2397,6 +2553,7 @@ document.getElementById('btn-export-exam-pdf').addEventListener('click', () => {
 });
 
 document.getElementById('btn-export-exam-results').addEventListener('click', async () => {
+  const exportTitle = window.__exportTitle || '';
   if (!lastExamResultsRows.length){
     toast('No results to export yet.', 'err');
     return;
@@ -2411,7 +2568,7 @@ document.getElementById('btn-export-exam-results').addEventListener('click', asy
 
     sheet.mergeCells('A1:H1');
     const titleCell = sheet.getCell('A1');
-    titleCell.value = 'CBT Assessment Platform — Examination Results Report';
+    titleCell.value = exportTitle ? `${exportTitle} — Examination Results` : 'CBT Assessment Platform — Examination Results Report';
     titleCell.font = { bold: true, size: 16, color: { argb: 'FFFFFFFF' } };
     titleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1B2A41' } };
     titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
@@ -2470,7 +2627,7 @@ document.getElementById('btn-export-exam-results').addEventListener('click', asy
     const a = document.createElement('a');
     const stamp = now.toISOString().slice(0,10);
     a.href = url;
-    a.download = `exam-results-${stamp}.xlsx`;
+    a.download = exportTitle ? `${exportTitle.replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '')}-results.xlsx` : `exam-results-${stamp}.xlsx`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -2822,6 +2979,7 @@ document.getElementById('btn-up-exam').addEventListener('click', async () => {
     if (!confirmOverwrite(getExamMode(), 'exam questions')){ statusEl.textContent = 'Upload cancelled.'; return; }
     const count = await rpc('admin_upload_exam_questions', { p_admin_id: admin.adminId, p_admin_pass: admin.adminPass, p_mode: getExamMode(), p_data: payload });
     if (count >= 0){ toast(`${count} exam question(s) uploaded.`, 'ok'); fileInput.value = ''; }
+    else if (count === -2) statusEl.textContent = 'Students have already started the current exam, so its paper cannot be replaced. Use "Reset for new exam" in Live exam monitoring first; the current results will be saved to Exam history.';
     else statusEl.textContent = 'Upload failed. Please try again.';
   }catch(err){
     statusEl.textContent = 'Unable to process this file: ' + (err.message || 'unknown error') + '. Please check the format and try again.';
@@ -3092,12 +3250,14 @@ document.getElementById('btn-relogin').addEventListener('click', async () => {
 });
 
 document.getElementById('btn-reset-sessions').addEventListener('click', async () => {
-  if (!confirm('This will permanently clear ALL live session records AND all submitted exam results for every student, so everyone can attempt a fresh exam. Continue?')) return;
-  if (!confirm('Final confirmation: are you absolutely sure? This cannot be undone unless you have exported the results first.')) return;
+  if (!confirm('Start a new exam?\n\nThe current exam and its results will be saved to Exam history, and all live sessions will be cleared so every student can attempt the new exam.')) return;
+  const examTitle = await askNewExamTitle();
+  if (examTitle === null) return;
   try{
-    const result = await rpc('admin_reset_for_new_exam', { p_admin_id: admin.adminId, p_admin_pass: admin.adminPass });
+    const result = await rpc('admin_reset_for_new_exam', { p_admin_id: admin.adminId, p_admin_pass: admin.adminPass, p_title: examTitle });
     if (result && result.ok){
-      toast(`Cleared ${result.sessions_deleted} session(s) and ${result.results_deleted} result(s).`, 'ok');
+      toast(`New exam "${examTitle}" is ready. ${result.results_deleted} previous result(s) were saved to Exam history.`, 'ok');
+      loadQuotaCard();
       loadLiveSessions();
     } else {
       toast('Unable to reset for a new exam.', 'err');
