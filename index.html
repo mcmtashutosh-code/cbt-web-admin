@@ -698,6 +698,7 @@
         <button class="btn btn-primary btn-sm" id="btn-hist-excel">📊 Excel</button>
         <button class="btn btn-sm" id="btn-hist-pdf">📄 PDF (for sharing)</button>
         <button class="btn btn-sm" id="btn-hist-rename">✏️ Rename</button>
+        <button class="btn btn-sm" id="btn-hist-copy" style="display:none;">📚 Copy questions to practice bank</button>
       </div>
       <div id="hist-rows"></div>
     </div>
@@ -1426,6 +1427,7 @@ document.getElementById('btn-build-exam').addEventListener('click', async () => 
   )) return;
   const typed = prompt('To confirm, type GENERATE (in capitals):');
   if (typed !== 'GENERATE'){ statusEl.textContent = 'Cancelled.'; return; }
+  if (!(await offerCopyBeforeNewExam())){ statusEl.textContent = 'Cancelled.'; return; }
   const examTitle = await askNewExamTitle();
   if (examTitle === null){ statusEl.textContent = 'Cancelled.'; return; }
 
@@ -1628,6 +1630,33 @@ async function loadAllSelfRegistered(){
 
 /* ---------------- LIVE-TEST QUOTA + EXAM HISTORY ---------------- */
 function fmtDay(d){ return d ? new Date(d).toLocaleDateString('en-IN', { day:'numeric', month:'short', year:'numeric' }) : '—'; }
+async function copyExamToPractice(subject, topic){
+  const r = await rpc('admin_copy_exam_to_practice', { ...adminCreds(), p_subject: subject || null, p_topic: topic || null });
+  if (r && r.ok){
+    toast(`${r.copied} question(s) copied to the practice bank${r.skipped ? `; ${r.skipped} were already there` : ''}.`, 'ok');
+    return true;
+  }
+  alert((r && r.error) || 'Unable to copy the questions. Please try again.');
+  return false;
+}
+/* Before replacing the paper: offer to keep the current questions for practice */
+async function offerCopyBeforeNewExam(){
+  if (!confirm('Copy the current exam\'s questions to the practice bank before starting the new exam?\n\nOK = copy them (recommended)\nCancel = skip')) return true;
+  try{ return await copyExamToPractice(null, null); }
+  catch(e){ alert('Connection error. The new exam was not started.'); return false; }
+}
+document.getElementById('btn-hist-copy').addEventListener('click', async () => {
+  if (!histCurrent || !histCurrent.is_current) return;
+  const subject = prompt('Subject for questions that have none (leave blank to keep each question\'s own subject):', '');
+  if (subject === null) return;
+  const topic = prompt('Topic for questions that have none (leave blank to use the exam name):', '');
+  if (topic === null) return;
+  if (!confirm(`Copy the questions of "${histCurrent.title}" to the practice bank?\n\nStudents will be able to practise them and see the answers. Questions already in the practice bank are skipped.`)) return;
+  const b = document.getElementById('btn-hist-copy'); b.disabled = true;
+  try{ await copyExamToPractice(subject.trim(), topic.trim()); }
+  catch(e){ toast('Connection error.', 'err'); }
+  finally{ b.disabled = false; }
+});
 async function askNewExamTitle(){
   let q = null;
   try{ q = await rpc('admin_get_quota', adminCreds()); }catch(e){}
@@ -1686,6 +1715,7 @@ document.getElementById('hist-list').addEventListener('click', async (e) => {
   const box = document.getElementById('hist-detail'), rowsEl = document.getElementById('hist-rows');
   box.style.display = 'block'; rowsEl.innerHTML = '<div class="spin"></div>';
   document.getElementById('hist-detail-title').textContent = histCurrent ? histCurrent.title : '';
+  document.getElementById('btn-hist-copy').style.display = (histCurrent && histCurrent.is_current) ? 'inline-block' : 'none';
   try{
     const r = await rpc('admin_exam_history_results', { ...adminCreds(), p_exam_id: id });
     if (!r || !r.ok){ rowsEl.innerHTML = '<div class="empty-state">Unable to load results.</div>'; return; }
@@ -3268,6 +3298,7 @@ document.getElementById('btn-relogin').addEventListener('click', async () => {
 
 document.getElementById('btn-reset-sessions').addEventListener('click', async () => {
   if (!confirm('Start a new exam?\n\nThe current exam and its results will be saved to Exam history, and all live sessions will be cleared so every student can attempt the new exam.')) return;
+  if (!(await offerCopyBeforeNewExam())) return;
   const examTitle = await askNewExamTitle();
   if (examTitle === null) return;
   try{
