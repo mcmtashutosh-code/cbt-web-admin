@@ -1677,8 +1677,29 @@ async function askNewExamTitle(){
   if (t === null) return null;
   return t.trim() || def;
 }
-function planBar(label, value, pct, warn){
-  const color = pct >= 100 ? '#e74c3c' : (warn ? '#f39c12' : 'var(--accent)');
+const PLAN_COLORS = {
+  green:  { bar: '#27ae60', text: '#58d68d', bg: '#27ae6026' },
+  yellow: { bar: '#f1c40f', text: '#f7dc6f', bg: '#f1c40f26' },
+  maroon: { bar: '#922b3e', text: '#e59aa8', bg: '#922b3e33' },
+  red:    { bar: '#e74c3c', text: '#ff8a7d', bg: '#e74c3c33' }
+};
+/* Expiry colour: long plans by days left, short plans (e.g. trial) by share of time left */
+function expiryLevel(daysLeft, daysTotal){
+  if (daysLeft <= 0) return 'red';
+  if (daysTotal && daysTotal < 30){
+    const share = daysLeft / daysTotal;
+    if (daysLeft <= 1) return 'red';
+    if (share > 0.5) return 'green';
+    if (share > 0.3) return 'yellow';
+    return 'maroon';
+  }
+  if (daysLeft > 30) return 'green';
+  if (daysLeft > 15) return 'yellow';
+  if (daysLeft > 3) return 'maroon';
+  return 'red';
+}
+function planBar(label, value, pct, warn, level){
+  const color = level ? PLAN_COLORS[level].bar : (pct >= 100 ? '#e74c3c' : (warn ? '#f1c40f' : '#27ae60'));
   return `<div><div style="display:flex; justify-content:space-between; font-size:13px; margin-bottom:5px;"><span style="color:var(--text-dim);">${label}</span><span style="font-weight:600;">${value}</span></div>
     <div style="height:7px; background:var(--field); border-radius:5px; overflow:hidden;"><div style="height:100%; width:${Math.max(0, Math.min(100, pct))}%; background:${color}; border-radius:5px;"></div></div></div>`;
 }
@@ -1690,20 +1711,29 @@ async function loadPlanCard(){
     const pill = document.getElementById('plan-days-pill');
     const rows = [];
     document.getElementById('plan-name').textContent = r.is_main ? 'Main institute' : (r.plan || 'free');
+    let level = 'green';
     if (r.end_date){
+      level = expiryLevel(r.days_left, r.days_total);
       const pct = r.days_total ? (r.days_used * 100 / r.days_total) : 0;
       rows.push(planBar(`Validity: ${fmtDay(r.start_date)} – ${fmtDay(r.end_date)}`,
-        `${r.days_used} of ${r.days_total} days used · ${r.days_left} left`, pct, r.days_left <= 15));
+        `${r.days_used} of ${r.days_total} days used · ${r.days_left} left`, pct, false, level));
       pill.textContent = r.days_left > 0 ? `${r.days_left} day${r.days_left === 1 ? '' : 's'} left` : 'Ends today';
-      pill.style.background = r.days_left <= 15 ? '#e74c3c33' : '#16a08533';
-      pill.style.color = r.days_left <= 15 ? '#ff8a7d' : '#5dcaa5';
+      if (r.days_left <= 15){
+        rows.push(`<div style="font-size:13px; font-weight:600; color:${PLAN_COLORS[level].text};">⏳ Your plan ends on ${fmtDay(r.end_date)}. Please contact the platform administrator to renew and avoid interruption for your students.</div>`);
+      }
     } else {
       rows.push(`<div style="font-size:13px; color:var(--text-dim);">Validity: <b style="color:var(--text);">No expiry</b></div>`);
-      pill.textContent = 'Active'; pill.style.background = '#16a08533'; pill.style.color = '#5dcaa5';
+      pill.textContent = 'Active';
     }
+    pill.style.background = PLAN_COLORS[level].bg;
+    pill.style.color = PLAN_COLORS[level].text;
+    card.style.borderColor = PLAN_COLORS[level].bar;
+    card.style.borderWidth = '1.5px';
+    card.style.borderStyle = 'solid';
     if (r.max_students !== null && r.max_students !== undefined){
       const pct = r.max_students ? (r.students * 100 / r.max_students) : 100;
-      rows.push(planBar('Students', `${r.students} of ${r.max_students}`, pct, pct >= 90));
+      rows.push(planBar('Students', `${r.students} of ${r.max_students}`, pct, false,
+        pct >= 100 ? 'red' : (pct >= 90 ? 'yellow' : 'green')));
     } else {
       rows.push(`<div style="font-size:13px; color:var(--text-dim);">Students: <b style="color:var(--text);">${r.students}</b> (no limit)</div>`);
     }
@@ -1712,7 +1742,8 @@ async function loadPlanCard(){
       const total = q.limit + (q.extra || 0);
       const pct = total ? (q.used * 100 / total) : 100;
       rows.push(planBar(`Live tests this month (resets ${fmtDay(addDayIso(q.cycle_end))})`,
-        `${q.used} of ${total} used · ${q.remaining} left`, pct, q.remaining <= 1));
+        `${q.used} of ${total} used · ${q.remaining} left`, pct, false,
+        q.remaining <= 0 ? 'red' : (q.remaining === 1 ? 'yellow' : 'green')));
     } else {
       rows.push(`<div style="font-size:13px; color:var(--text-dim);">Live tests: <b style="color:var(--text);">Unlimited</b></div>`);
     }
@@ -1952,6 +1983,8 @@ document.getElementById('btn-sup-reply').addEventListener('click', async () => {
 
 async function loadSubscription(){
   const box = document.getElementById('subscription-banner');
+  box.style.display = 'none';   /* renewal notice is now part of the "My plan" card */
+  return;
   try{
     const r = await rpc('admin_get_subscription', adminCreds());
     if (r && r.ok && r.days_left !== null && r.days_left !== undefined && r.days_left <= 15){
