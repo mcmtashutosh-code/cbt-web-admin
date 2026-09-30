@@ -208,6 +208,9 @@
   .live-actions{display:flex; gap:6px;}
   #toast{position:fixed; left:50%; bottom:24px; transform:translateX(-50%) translateY(20px); background:var(--card); border:1px solid var(--line); color:var(--text); padding:12px 18px; border-radius:10px; font-size:13.5px; opacity:0; pointer-events:none; transition:opacity .2s, transform .2s; max-width:88%; text-align:center; z-index:50;}
   #toast.show{opacity:1; transform:translateX(-50%) translateY(0);}
+
+  @keyframes spin360{ to{ transform:rotate(360deg); } }
+  .refreshing{ animation:spin360 .7s linear infinite; }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
 </head>
@@ -219,7 +222,10 @@
   <div class="sticky-header">
     <div class="brandbar">
       <div class="brand-l"><span class="badge">ADMIN</span><span class="name">Control Panel</span></div>
-      <button class="theme-toggle" id="theme-toggle" title="Toggle dark/light mode">🌙</button>
+      <div style="display:flex; align-items:center; gap:8px;">
+        <button class="theme-toggle" id="btn-refresh" title="Refresh" style="display:none;">🔄</button>
+        <button class="theme-toggle" id="theme-toggle" title="Toggle dark/light mode">🌙</button>
+      </div>
     </div>
     <div class="header-actions" id="header-actions" style="display:none;">
       <button class="top-back-btn" id="btn-top-back">← Log out</button>
@@ -1142,6 +1148,26 @@ function toast(msg, kind){
   toast._t = setTimeout(() => el.classList.remove('show'), 3000);
 }
 function esc(s){ const d=document.createElement('div'); d.textContent = s==null?'':String(s); return d.innerHTML; }
+/* ---------------- SOFT REFRESH (keeps you signed in) ---------------- */
+let currentViewId = 'view-login', lastMenuCard = null;
+document.addEventListener('click', (e) => {
+  const mc = e.target.closest('.menu-card');
+  if (mc && mc.id) lastMenuCard = mc.id;
+}, true);
+document.getElementById('btn-refresh').addEventListener('click', async () => {
+  const b = document.getElementById('btn-refresh');
+  if (b.classList.contains('refreshing')) return;
+  b.classList.add('refreshing');
+  try{
+    if (currentViewId === 'view-menu'){
+      await loadDashboardStats();
+    } else if (lastMenuCard && document.getElementById(lastMenuCard)){
+      document.getElementById(lastMenuCard).click();
+    }
+    toast('Refreshed.', 'ok');
+  }catch(e){ toast('Unable to refresh. Please check your connection.', 'err'); }
+  finally{ setTimeout(() => b.classList.remove('refreshing'), 600); }
+});
 function showView(id){
   document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
   document.getElementById(id).classList.add('active');
@@ -1151,6 +1177,8 @@ function showView(id){
     liveRefreshIntervalId = null;
   }
   updateTopBack(id);
+  currentViewId = id;
+  document.getElementById('btn-refresh').style.display = (id === 'view-login') ? 'none' : 'inline-flex';
   window.scrollTo(0,0);
 }
 
