@@ -126,12 +126,23 @@
   .footer{text-align:center; padding:20px 20px 4px; font-size:10.5px; color:var(--text-mute); line-height:1.7;}
   .footer .lock{color:var(--accent-text);}
 
-  .menu-grid{display:flex; flex-direction:column; gap:12px; margin-top:8px;}
-  .menu-card{background:var(--card); border:1px solid var(--line-soft); border-radius:var(--radius); padding:18px; cursor:pointer;}
+  .menu-grid{display:grid; grid-template-columns:repeat(auto-fill, minmax(200px, 1fr)); gap:10px; margin-top:8px;}
+  .menu-card{background:var(--card); border:1px solid var(--line-soft); border-radius:var(--radius); padding:12px 14px; cursor:pointer;
+             display:grid; grid-template-columns:auto 1fr; column-gap:10px; align-items:start;}
   .menu-card:hover{border-color:var(--accent);}
-  .menu-card .mi{font-size:22px; margin-bottom:6px;}
-  .menu-card .mt{font-size:15px; font-weight:700; margin-bottom:2px;}
-  .menu-card .ms{font-size:12px; color:var(--text-mute);}
+  .menu-card .mi{font-size:20px; line-height:1.2; grid-row:span 2;}
+  .menu-card .mt{font-size:14px; font-weight:700; margin-bottom:2px;}
+  .menu-card .ms{font-size:11.5px; color:var(--text-mute); display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;}
+  @media (max-width:520px){
+    .menu-grid{grid-template-columns:1fr 1fr; gap:8px;}
+    .menu-card{padding:10px 11px; column-gap:8px;}
+    .menu-card .mi{font-size:18px;}
+    .menu-card .mt{font-size:13px;}
+    .menu-card .ms{display:none;}
+  }
+  #dash-stats-strip{display:grid !important; grid-template-columns:repeat(4, 1fr); gap:8px !important; margin:12px 0 14px !important;}
+  #dash-stats-strip .dash-stat-chip{min-width:0; padding:8px 10px;}
+  @media (max-width:520px){ #dash-stats-strip{grid-template-columns:repeat(2, 1fr);} }
   .dash-stat-chip{background:var(--card); border:1px solid var(--line-soft); border-radius:var(--radius-sm); padding:10px 16px; min-width:110px; text-align:center;}
   .dash-stat-num{display:block; font-size:20px; font-weight:800; color:var(--accent-text);}
   .dash-stat-lbl{display:block; font-size:11px; color:var(--text-mute); margin-top:2px;}
@@ -1166,6 +1177,42 @@ function toast(msg, kind){
   toast._t = setTimeout(() => el.classList.remove('show'), 3000);
 }
 function esc(s){ const d=document.createElement('div'); d.textContent = s==null?'':String(s); return d.innerHTML; }
+/* ---------------- NEW VERSION CHECK ----------------
+   "Refresh" reloads data only. When a new file is uploaded to GitHub, this
+   notices it (by APP_VERSION) and offers to load the new version. */
+const APP_VERSION = '2026-10-01.2';
+let updShown = false;
+async function checkForUpdate(){
+  try{
+    const res = await fetch(location.pathname + '?v=' + Date.now(), { cache: 'no-store' });
+    if (!res.ok) return false;
+    const m = (await res.text()).match(/const APP_VERSION = '([^']+)'/);
+    if (m && m[1] !== APP_VERSION){ showUpdateBanner(); return true; }
+  }catch(_e){}
+  return false;
+}
+function showUpdateBanner(){
+  if (updShown) return; updShown = true;
+  const d = document.createElement('div');
+  d.id = 'upd-banner';
+  d.style.cssText = 'position:fixed; left:50%; transform:translateX(-50%); top:max(10px, env(safe-area-inset-top, 0px)); z-index:9999; background:#11203a; color:#fff; border:1px solid #16a085; border-radius:12px; padding:10px 12px; display:flex; gap:10px; align-items:center; box-shadow:0 8px 24px rgba(0,0,0,.35); max-width:calc(100% - 20px); font-size:13.5px;';
+  d.innerHTML = '<span>🆕 A new version of this panel is available.</span>'
+    + '<button type="button" data-u="go" style="background:#16a085; color:#06231e; border:0; border-radius:8px; padding:7px 12px; font-weight:700; cursor:pointer;">Update now</button>'
+    + '<button type="button" data-u="later" style="background:transparent; color:#aab7b8; border:0; cursor:pointer;">Later</button>';
+  d.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-u]'); if (!b) return;
+    if (b.dataset.u === 'later'){ d.remove(); updShown = false; return; }
+    if (confirm('Load the new version now?\n\nYou will need to sign in again. Anything not yet saved on this screen will be lost.')){
+      location.replace(location.pathname + '?v=' + Date.now());
+    }
+  });
+  document.body.appendChild(d);
+}
+setInterval(checkForUpdate, 30 * 60 * 1000);
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') checkForUpdate(); });
+setTimeout(checkForUpdate, 5000);
+const nowTime = () => new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
 /* ---------------- SOFT REFRESH (keeps you signed in) ---------------- */
 let currentViewId = 'view-login', lastMenuCard = null;
 document.addEventListener('click', (e) => {
@@ -1182,7 +1229,8 @@ document.getElementById('btn-refresh').addEventListener('click', async () => {
     } else if (lastMenuCard && document.getElementById(lastMenuCard)){
       document.getElementById(lastMenuCard).click();
     }
-    toast('Refreshed.', 'ok');
+    const upd = await checkForUpdate();
+    toast(`Refreshed at ${nowTime()}.${upd ? ' A new version is available.' : ''}`, 'ok');
   }catch(e){ toast('Unable to refresh. Please check your connection.', 'err'); }
   finally{ setTimeout(() => b.classList.remove('refreshing'), 600); }
 });
