@@ -782,6 +782,7 @@
         <button class="sr-tab on" data-lb="live" type="button">Live tests</button>
         <button class="sr-tab" data-lb="mock" type="button">Mock tests</button>
         <button class="sr-tab" data-lb="practice" type="button">Practice</button>
+        <button class="sr-tab" data-lb="challenge" type="button">Daily challenge</button>
       </div>
       <div id="lb-out"><div class="spin"></div></div>
       <div class="sr-note" id="lb-note"></div>
@@ -1257,7 +1258,7 @@ function esc(s){ const d=document.createElement('div'); d.textContent = s==null?
 /* ---------------- NEW VERSION CHECK ----------------
    "Refresh" reloads data only. When a new file is uploaded to GitHub, this
    notices it (by APP_VERSION) and offers to load the new version. */
-const APP_VERSION = '2026-10-02.2';
+const APP_VERSION = '2026-10-02.3';
 let updShown = false;
 async function checkForUpdate(){
   try{
@@ -1314,17 +1315,19 @@ function srRenderLeaderboard(){
   document.querySelectorAll('#lb-tabs .sr-tab').forEach(b => b.classList.toggle('on', b.dataset.lb === lbTab));
   const note = { live: `Ranked by average score across all live exams (at least ${rules.live_min || 1} exam).`,
                  mock: `Ranked by average score across mock tests (at least ${rules.mock_min || 2} mock tests).`,
-                 practice: `Ranked by practice accuracy (at least ${rules.practice_min || 50} questions attempted).` }[lbTab];
+                 practice: `Ranked by practice accuracy (at least ${rules.practice_min || 50} questions attempted).`,
+                 challenge: 'Ranked by total daily-challenge points (same as the overall leaderboard students see).' }[lbTab];
   document.getElementById('lb-note').textContent = note;
   if (!rows.length){ el.innerHTML = '<div class="empty-state" style="padding:24px 10px;">No students qualify yet.</div>'; return; }
   const medal = i => ['🥇', '🥈', '🥉'][i] || (i + 1);
   const extra = x => lbTab === 'live' ? `${x.count} exam${x.count == 1 ? '' : 's'} · avg ${x.avg_marks} marks`
                    : lbTab === 'mock' ? `${x.count} mock tests · ${x.questions} questions`
+                   : lbTab === 'challenge' ? `${x.count} challenges · avg ${x.score ?? '—'} per challenge`
                    : `${x.correct}/${x.attempted} correct`;
   el.innerHTML = rows.map((x, i) => `<div class="lb-row" data-m="${esc(x.mobile)}">
       <span class="lb-rank">${medal(i)}</span>
       <span class="lb-name"><b>${esc(x.name)}</b><span class="sr-sub">${esc(x.mobile)} · ${extra(x)}</span></span>
-      <span class="lb-score">${x.score}%</span></div>`).join('');
+      <span class="lb-score">${lbTab === 'challenge' ? x.points + ' pts' : x.score + '%'}</span></div>`).join('');
 }
 document.getElementById('lb-tabs').addEventListener('click', e => { const b = e.target.closest('.sr-tab'); if (!b) return; lbTab = b.dataset.lb; srRenderLeaderboard(); });
 document.getElementById('lb-out').addEventListener('click', e => { const r = e.target.closest('.lb-row'); if (r) srOpenProfile(r.dataset.m); });
@@ -1406,8 +1409,12 @@ function srRenderProfile(){
         `<tr><td>${esc(String(x.date || '').slice(0, 10))}</td><td>${esc(x.subject || '')} → ${esc(x.topic || '')}</td><td>${esc(x.level || '')}</td><td>${x.attempted}/${x.total_q}</td><td>${x.correct}</td><td>${pctTxt(x.pct)}</td><td>${del('practice', x.id)}</td></tr>`))
         : '<div class="empty-state" style="padding:16px;">No practice yet.</div>'}</div>
 
+    <div class="sr-card"><div class="sr-h">🎯 Daily challenge <span class="sr-sub">${C.points || 0} points · ${C.done || 0} challenges · avg ${fmt1(C.avg)} per challenge</span></div>
+      ${Object.keys(C.topics || {}).length ? srTable(['Topic', 'Points'], Object.entries(C.topics).sort((a, b) => b[1] - a[1]).map(([t, p]) => `<tr><td>${esc(t)}</td><td><b>${p}</b></td></tr>`))
+        : '<div class="empty-state" style="padding:16px;">No daily-challenge points yet.</div>'}</div>
+
     <div class="sr-card sr-danger"><div class="sr-h">⚠️ Delete all activity</div>
-      <div class="sr-sub" style="margin-bottom:8px;">Permanently deletes this student's live-test results, mock tests, practice sessions and daily-challenge attempts. The student's account is kept and can still sign in. Records can be deleted, never edited, and every deletion is logged.</div>
+      <div class="sr-sub" style="margin-bottom:8px;">Permanently deletes this student's live-test results, mock tests, practice sessions, daily-challenge attempts and challenge points. The student's account is kept and can still sign in. Records can be deleted, never edited, and every deletion is logged.</div>
       <button class="btn btn-sm" id="sr-del-all" type="button" style="border-color:#e74c3c; color:#ff8a7d;">🗑 Delete all activity…</button></div>`;
   document.getElementById('sr-print').addEventListener('click', srPrint);
   document.getElementById('sr-del-all').addEventListener('click', async () => {
