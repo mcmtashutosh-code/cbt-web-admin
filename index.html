@@ -140,6 +140,18 @@
     .menu-card .mt{font-size:13px;}
     .menu-card .ms{display:none;}
   }
+  #tc-gate{position:fixed; inset:0; z-index:9998; background:rgba(5,12,22,.86); display:flex; align-items:center; justify-content:center; padding:12px;}
+  .tc-box{background:var(--card); border:1px solid var(--line); border-radius:14px; width:100%; max-width:760px; max-height:94vh; display:flex; flex-direction:column; overflow:hidden;}
+  .tc-head{padding:14px 18px; border-bottom:1px solid var(--line-soft);}
+  .tc-title{font-size:17px; font-weight:800;} .tc-meta{font-size:12px; color:var(--text-mute); margin-top:2px;}
+  .tc-note{font-size:12.5px; margin-top:8px; color:var(--accent-text);}
+  .tc-scroll{overflow:auto; padding:6px 18px 10px; flex:1; min-height:160px;}
+  .tc-h{font-size:14.5px; margin:16px 0 6px;} .tc-p{margin:0 0 8px; line-height:1.55; font-size:13.5px;}
+  .tc-ul{margin:4px 0 10px 18px; padding:0; font-size:13.5px; line-height:1.55;}
+  .tc-foot{padding:12px 18px; border-top:1px solid var(--line-soft); display:flex; flex-direction:column; gap:8px;}
+  .tc-check{display:flex; gap:8px; align-items:flex-start; font-size:13px; line-height:1.45;} .tc-check input{width:auto; margin-top:3px;}
+  .tc-row{display:flex; gap:8px; flex-wrap:wrap;} .tc-row input{flex:1 1 200px;} .tc-row .btn{flex:1 1 auto;}
+  .tc-read{background:var(--card); border:1px solid var(--line-soft); border-radius:var(--radius); padding:6px 16px 10px; margin-top:12px;}
   .ov-toggle{width:100%; display:flex; align-items:center; gap:10px; background:var(--card); border:1px solid var(--line-soft); border-radius:var(--radius);
              padding:11px 14px; margin:12px 0 10px; color:var(--text); font:inherit; cursor:pointer; text-align:left;}
   .ov-toggle:hover{border-color:var(--accent);}
@@ -388,6 +400,11 @@
         <div class="mi">📨</div>
         <div class="mt">Notices & messages</div>
         <div class="ms">Post announcements and chat with students</div>
+      </div>
+      <div class="menu-card" id="menu-terms">
+        <div class="mi">📜</div>
+        <div class="mt">Terms &amp; conditions</div>
+        <div class="ms">Platform terms accepted by your institute</div>
       </div>
       <div class="menu-card" id="menu-examsettings">
         <div class="mi">⚙️</div>
@@ -732,6 +749,12 @@
   </div>
 
   <!-- ============ ADMIN CREDENTIALS ============ -->
+  <div class="view" id="view-terms">
+    <div class="section-title">Terms &amp; conditions</div>
+    <div class="section-sub">The platform terms that apply to your institute, and who accepted them.</div>
+    <div id="terms-out"><div class="spin"></div></div>
+  </div>
+
   <div class="view" id="view-platform-msgs">
     <div class="section-title">Platform messages</div>
     <div class="section-sub">Announcements and notices from the platform team. A copy is also sent to your institute's contact email.</div>
@@ -1187,7 +1210,7 @@ function esc(s){ const d=document.createElement('div'); d.textContent = s==null?
 /* ---------------- NEW VERSION CHECK ----------------
    "Refresh" reloads data only. When a new file is uploaded to GitHub, this
    notices it (by APP_VERSION) and offers to load the new version. */
-const APP_VERSION = '2026-10-01.3';
+const APP_VERSION = '2026-10-02.1';
 let updShown = false;
 async function checkForUpdate(){
   try{
@@ -1219,6 +1242,96 @@ setInterval(checkForUpdate, 30 * 60 * 1000);
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') checkForUpdate(); });
 setTimeout(checkForUpdate, 5000);
 const nowTime = () => new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
+/* ---------------- TERMS & CONDITIONS (must be accepted; readable any time) ---------------- */
+function renderTermsText(text){
+  const out = []; let list = null;
+  String(text || '').split(/\r?\n/).forEach(line => {
+    const l = line.trim();
+    if (l.startsWith('- ')){ if (!list) list = []; list.push(`<li>${esc(l.slice(2))}</li>`); return; }
+    if (list){ out.push(`<ul class="tc-ul">${list.join('')}</ul>`); list = null; }
+    if (!l) return;
+    out.push(l.startsWith('## ') ? `<h3 class="tc-h">${esc(l.slice(3))}</h3>` : `<p class="tc-p">${esc(l)}</p>`);
+  });
+  if (list) out.push(`<ul class="tc-ul">${list.join('')}</ul>`);
+  return out.join('');
+}
+const tcDate = d => d ? new Date(d).toLocaleDateString('en-IN', { day:'2-digit', month:'short', year:'numeric' }) : '—';
+let tcGateOpen = false;
+async function checkTerms(){
+  if (tcGateOpen) return;
+  let r = null;
+  try{ r = await rpc('admin_terms_status', adminCreds()); }catch(_e){ return; }
+  if (!r || !r.ok || !r.required) return;
+  showTermsGate(r);
+}
+function showTermsGate(r){
+  tcGateOpen = true;
+  const t = r.terms;
+  const ov = document.createElement('div');
+  ov.id = 'tc-gate';
+  ov.innerHTML = `<div class="tc-box" role="dialog" aria-modal="true" aria-labelledby="tc-title">
+    <div class="tc-head"><div id="tc-title" class="tc-title">${esc(t.title)}</div>
+      <div class="tc-meta">Version ${t.version} · effective ${tcDate(t.effective_date)} · for ${esc(r.institute || '')}</div>
+      <div class="tc-note">Please read these terms in full. They explain your institute's responsibilities, including for your students' data. Scroll to the end to continue.</div></div>
+    <div class="tc-scroll" id="tc-scroll">${renderTermsText(t.body)}<p class="tc-p" style="text-align:center; color:var(--text-mute);">— End of terms —</p></div>
+    <div class="tc-foot">
+      <label class="tc-check"><input type="checkbox" id="tc-agree" disabled><span>I have read and agree to these Terms and Conditions on behalf of <b>${esc(r.institute || 'my institute')}</b>, and I am authorised to do so.</span></label>
+      <div class="tc-row"><input id="tc-name" placeholder="Your full name" maxlength="120"><input id="tc-role" placeholder="Your designation (e.g. Director)" maxlength="80"></div>
+      <div class="error-text" id="tc-err"></div>
+      <div class="tc-row"><button class="btn btn-primary" id="tc-accept" disabled>Accept and continue</button>
+        <button class="btn" id="tc-decline" style="flex:none;">Decline and sign out</button></div>
+    </div></div>`;
+  document.body.appendChild(ov);
+  document.body.style.overflow = 'hidden';
+  const sc = document.getElementById('tc-scroll'), agree = document.getElementById('tc-agree'), acc = document.getElementById('tc-accept');
+  const ready = () => { acc.disabled = !(agree.checked && document.getElementById('tc-name').value.trim().length >= 3 && document.getElementById('tc-role').value.trim().length >= 2); };
+  const atEnd = () => { if (sc.scrollTop + sc.clientHeight >= sc.scrollHeight - 30){ agree.disabled = false; } };
+  sc.addEventListener('scroll', atEnd); setTimeout(atEnd, 300);
+  [agree, document.getElementById('tc-name'), document.getElementById('tc-role')].forEach(el => el.addEventListener('input', ready));
+  agree.addEventListener('change', ready);
+  document.getElementById('tc-decline').addEventListener('click', () => {
+    if (!confirm('Without accepting the terms you cannot use the dashboard. Sign out?')) return;
+    ov.remove(); document.body.style.overflow = ''; tcGateOpen = false; doLogout();
+  });
+  acc.addEventListener('click', async () => {
+    const err = document.getElementById('tc-err'); err.textContent = ''; acc.disabled = true; acc.textContent = 'Saving…';
+    try{
+      const res = await rpc('admin_terms_accept', { ...adminCreds(), p_version: t.version,
+        p_name: document.getElementById('tc-name').value.trim(), p_role: document.getElementById('tc-role').value.trim(),
+        p_user_agent: navigator.userAgent });
+      if (res && res.ok){ ov.remove(); document.body.style.overflow = ''; tcGateOpen = false; toast('Thank you. Your acceptance has been recorded.', 'ok'); return; }
+      err.textContent = (res && res.error) || 'Unable to record your acceptance. Please try again.';
+      if (res && /updated/.test(res.error || '')){ ov.remove(); tcGateOpen = false; checkTerms(); }
+    }catch(_e){ err.textContent = 'Connection error. Please try again.'; }
+    acc.textContent = 'Accept and continue'; ready();
+  });
+}
+async function openTermsSection(){
+  showView('view-terms');
+  const el = document.getElementById('terms-out');
+  el.innerHTML = '<div class="spin"></div>';
+  try{
+    const r = await rpc('admin_terms_status', adminCreds());
+    if (!r || !r.ok){ el.innerHTML = '<div class="empty-state">Unable to load the terms.</div>'; return; }
+    if (!r.published){ el.innerHTML = '<div class="empty-state">The platform terms have not been published yet.</div>'; return; }
+    const a = r.accepted;
+    el.innerHTML = `<div class="sup-item" style="cursor:default;">
+        <div class="sup-subj">${esc(r.terms.title)}</div>
+        <div class="sup-meta">Version ${r.terms.version} · effective ${tcDate(r.terms.effective_date)}</div>
+        <div class="sup-meta" style="margin-top:6px;">${a ? `✅ Accepted by <b>${esc(a.name)}</b> (${esc(a.role)}, ${esc(a.admin_id)}) on ${esc(new Date(a.at).toLocaleString('en-IN'))}` : '⚠️ Not yet accepted.'}</div>
+      </div>
+      <div class="tc-read">${renderTermsText(r.terms.body)}</div>
+      ${r.history && r.history.length > 1 ? `<div class="sup-meta" style="margin-top:10px;">Acceptance history: ${r.history.map(h => `v${h.version} by ${esc(h.name)} on ${tcDate(h.at)}`).join(' · ')}</div>` : ''}
+      <div class="btn-row" style="margin-top:10px;"><button class="btn" id="btn-terms-print" type="button">🖨 Print / Save as PDF</button></div>`;
+    if (!a) showTermsGate(r);
+    document.getElementById('btn-terms-print').addEventListener('click', () => {
+      const w = window.open('', '_blank'); if (!w) return;
+      w.document.write(`<html><head><title>${esc(r.terms.title)}</title><style>body{font-family:Arial,sans-serif;max-width:800px;margin:24px auto;color:#1b2a41;line-height:1.55;font-size:13px;}h3{font-size:15px;margin:16px 0 6px;}</style></head><body><h2>${esc(r.terms.title)}</h2><p>Version ${r.terms.version} · effective ${tcDate(r.terms.effective_date)}${a ? ` · accepted by ${esc(a.name)} (${esc(a.role)}) on ${esc(new Date(a.at).toLocaleString('en-IN'))}` : ''}</p>${renderTermsText(r.terms.body)}</body></html>`);
+      w.document.close(); w.focus(); w.print();
+    });
+  }catch(_e){ el.innerHTML = '<div class="empty-state">Connection error.</div>'; }
+}
 
 /* ---------------- INSTITUTE OVERVIEW (show / hide, remembered) ----------------
    Plan, statistics, live-test card and registration link sit behind one toggle at the top.
@@ -1689,6 +1802,7 @@ async function doLogin(){
     startSessionWatch();
     showView('view-menu');
     loadDashboardStats();
+    checkTerms();
   }catch(err){
     errEl.textContent = 'Connection error. Please check your internet and try again.';
     btn.disabled = false; btn.textContent = 'Sign in';
@@ -1704,6 +1818,7 @@ document.getElementById('menu-settings').addEventListener('click', openSettingsS
 document.getElementById('menu-support').addEventListener('click', openSupportSection);
 document.getElementById('menu-history').addEventListener('click', openHistorySection);
 document.getElementById('menu-platform-msgs').addEventListener('click', openPlatformMessages);
+document.getElementById('menu-terms').addEventListener('click', openTermsSection);
 document.getElementById('pm-banner').addEventListener('click', openPlatformMessages);
 document.getElementById('menu-settings').addEventListener('click', async () => {
   const el = document.getElementById('rst-noemail');
@@ -2190,6 +2305,7 @@ async function loadDashboardStats(){
   loadSupportBadge();
   loadQuotaCard();
   loadPlatformBadge();
+  checkTerms();
   try{
     const rows = await rpc('admin_get_dashboard_stats', { p_admin_id: admin.adminId, p_admin_pass: admin.adminPass });
     const s = rows && rows[0];
