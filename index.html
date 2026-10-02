@@ -140,6 +140,13 @@
     .menu-card .mt{font-size:13px;}
     .menu-card .ms{display:none;}
   }
+  .ov-toggle{width:100%; display:flex; align-items:center; gap:10px; background:var(--card); border:1px solid var(--line-soft); border-radius:var(--radius);
+             padding:11px 14px; margin:12px 0 10px; color:var(--text); font:inherit; cursor:pointer; text-align:left;}
+  .ov-toggle:hover{border-color:var(--accent);}
+  .ov-toggle .ot{font-weight:700; font-size:14px; white-space:nowrap;}
+  .ov-toggle .os{flex:1; font-size:12px; color:var(--text-mute); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .ov-toggle .oc{font-size:12px; color:var(--accent-text); white-space:nowrap;}
+  #ov-body.collapsed{display:none;}
   #dash-stats-strip{display:grid !important; grid-template-columns:repeat(4, 1fr); gap:8px !important; margin:12px 0 14px !important;}
   #dash-stats-strip .dash-stat-chip{min-width:0; padding:8px 10px;}
   @media (max-width:520px){ #dash-stats-strip{grid-template-columns:repeat(2, 1fr);} }
@@ -1180,7 +1187,7 @@ function esc(s){ const d=document.createElement('div'); d.textContent = s==null?
 /* ---------------- NEW VERSION CHECK ----------------
    "Refresh" reloads data only. When a new file is uploaded to GitHub, this
    notices it (by APP_VERSION) and offers to load the new version. */
-const APP_VERSION = '2026-10-01.2';
+const APP_VERSION = '2026-10-01.3';
 let updShown = false;
 async function checkForUpdate(){
   try{
@@ -1212,6 +1219,41 @@ setInterval(checkForUpdate, 30 * 60 * 1000);
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') checkForUpdate(); });
 setTimeout(checkForUpdate, 5000);
 const nowTime = () => new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
+/* ---------------- INSTITUTE OVERVIEW (show / hide, remembered) ----------------
+   Plan, statistics, live-test card and registration link sit behind one toggle at the top.
+   Urgent notices (expiring plan, new platform message) always stay visible. */
+(function setupOverviewToggle(){
+  const menu = document.getElementById('view-menu'); if (!menu) return;
+  const sub = menu.querySelector('.section-sub'), grid = menu.querySelector('.menu-grid');
+  const btn = document.createElement('button');
+  btn.type = 'button'; btn.className = 'ov-toggle'; btn.id = 'ov-toggle';
+  btn.innerHTML = '<span class="ot">📋 Institute overview</span><span class="os" id="ov-summary"></span><span class="oc" id="ov-chev"></span>';
+  const body = document.createElement('div'); body.id = 'ov-body';
+  ['dash-stats-strip', 'plan-card', 'quota-card', 'join-link-card'].forEach(id => { const el = document.getElementById(id); if (el) body.appendChild(el); });
+  (sub || grid).parentNode.insertBefore(btn, sub ? sub.nextSibling : grid);
+  btn.parentNode.insertBefore(body, btn.nextSibling);
+  let open = false;
+  try{ open = localStorage.getItem('adm_overview_open') === '1'; }catch(_e){}
+  const apply = () => {
+    body.classList.toggle('collapsed', !open);
+    document.getElementById('ov-chev').textContent = open ? 'Hide ▲' : 'Show ▼';
+    btn.setAttribute('aria-expanded', String(open));
+  };
+  btn.addEventListener('click', () => { open = !open; try{ localStorage.setItem('adm_overview_open', open ? '1' : '0'); }catch(_e){} apply(); });
+  // One-line summary while collapsed
+  const summary = () => {
+    const t = id => { const el = document.getElementById(id); return el ? el.textContent.trim() : ''; };
+    const parts = [];
+    const stu = t('stat-total-students'); if (stu && stu !== '—') parts.push(`${stu} students`);
+    const pend = t('stat-pending'); if (pend && pend !== '—' && pend !== '0') parts.push(`${pend} pending`);
+    const plan = t('plan-name'); if (plan) parts.push(plan.replace(/^my plan:\s*/i, ''));
+    const pill = t('plan-days-pill'); if (pill) parts.push(pill);
+    document.getElementById('ov-summary').textContent = parts.join(' · ');
+  };
+  new MutationObserver(summary).observe(body, { subtree: true, childList: true, characterData: true });
+  apply(); summary();
+})();
 
 /* ---------------- SOFT REFRESH (keeps you signed in) ---------------- */
 let currentViewId = 'view-login', lastMenuCard = null;
