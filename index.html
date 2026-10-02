@@ -140,6 +140,24 @@
     .menu-card .mt{font-size:13px;}
     .menu-card .ms{display:none;}
   }
+  .sr-card{background:var(--card); border:1px solid var(--line-soft); border-radius:var(--radius); padding:14px 16px; margin-top:12px;}
+  .sr-h{font-size:15px; font-weight:800; margin-bottom:8px;} .sr-sub{display:block; font-size:12px; color:var(--text-mute); font-weight:400;}
+  .sr-h .sr-sub{display:inline; margin-left:6px;}
+  .sr-tabs{display:flex; gap:6px; margin-bottom:8px; flex-wrap:wrap;}
+  .sr-tab{background:transparent; border:1px solid var(--line-soft); color:var(--text-dim); border-radius:16px; padding:6px 12px; font:inherit; font-size:12.5px; cursor:pointer;}
+  .sr-tab.on{background:var(--accent); border-color:var(--accent); color:#04201b; font-weight:700;}
+  .lb-row{display:grid; grid-template-columns:34px 1fr auto; gap:8px; align-items:center; padding:8px 4px; border-top:1px solid var(--line-soft); cursor:pointer;}
+  .lb-row:first-child{border-top:0;} .lb-row:hover{background:var(--field);}
+  .lb-rank{font-size:18px; text-align:center;} .lb-score{font-weight:800; color:var(--accent-text); font-size:15px;}
+  .sr-note{font-size:11.5px; color:var(--text-mute); margin-top:6px;}
+  .sr-hit{padding:9px 6px; border-top:1px solid var(--line-soft); cursor:pointer;} .sr-hit:hover{background:var(--field);}
+  .sr-hit .sr-sub{display:inline;}
+  .sr-kpis{display:grid; grid-template-columns:repeat(4, 1fr); gap:8px; margin-top:12px;}
+  @media (max-width:520px){ .sr-kpis{grid-template-columns:repeat(2, 1fr);} }
+  .sr-table{width:100%; border-collapse:collapse; font-size:12.5px;}
+  .sr-table th{color:var(--text-mute); text-align:left; font-size:11px; padding:6px 5px; font-weight:600;}
+  .sr-table td{padding:6px 5px; border-top:1px solid var(--line-soft); white-space:nowrap;}
+  .sr-danger{border-color:#e74c3c55;}
   #tc-gate{position:fixed; inset:0; z-index:9998; background:rgba(5,12,22,.86); display:flex; align-items:center; justify-content:center; padding:12px;}
   .tc-box{background:var(--card); border:1px solid var(--line); border-radius:14px; width:100%; max-width:760px; max-height:94vh; display:flex; flex-direction:column; overflow:hidden;}
   .tc-head{padding:14px 18px; border-bottom:1px solid var(--line-soft);}
@@ -340,6 +358,11 @@
         <div class="mi">🆕</div>
         <div class="mt">Pending registrations <span id="pending-badge" style="display:none; background:#e74c3c; color:#fff; font-size:11px; font-weight:700; padding:2px 7px; border-radius:10px; margin-left:4px;"></span></div>
         <div class="ms">Review and approve self-registered students</div>
+      </div>
+      <div class="menu-card" id="menu-students">
+        <div class="mi">🎓</div>
+        <div class="mt">Student records</div>
+        <div class="ms">Find a student, see results and the top 10</div>
       </div>
       <div class="menu-card" id="menu-feedback">
         <div class="mi">✉</div>
@@ -749,6 +772,30 @@
   </div>
 
   <!-- ============ ADMIN CREDENTIALS ============ -->
+  <div class="view" id="view-students">
+    <div class="section-title">Student records</div>
+    <div class="section-sub">Look up any student's performance, and see your institute's top performers.</div>
+
+    <div class="sr-card">
+      <div class="sr-h">🏆 Top 10 students</div>
+      <div class="sr-tabs" id="lb-tabs">
+        <button class="sr-tab on" data-lb="live" type="button">Live tests</button>
+        <button class="sr-tab" data-lb="mock" type="button">Mock tests</button>
+        <button class="sr-tab" data-lb="practice" type="button">Practice</button>
+      </div>
+      <div id="lb-out"><div class="spin"></div></div>
+      <div class="sr-note" id="lb-note"></div>
+    </div>
+
+    <div class="sr-card">
+      <div class="sr-h">🔎 Find a student</div>
+      <input id="sr-q" type="search" placeholder="Mobile number, name or email" autocomplete="off">
+      <div id="sr-results"></div>
+    </div>
+
+    <div id="sr-profile"></div>
+  </div>
+
   <div class="view" id="view-terms">
     <div class="section-title">Terms &amp; conditions</div>
     <div class="section-sub">The platform terms that apply to your institute, and who accepted them.</div>
@@ -1210,7 +1257,7 @@ function esc(s){ const d=document.createElement('div'); d.textContent = s==null?
 /* ---------------- NEW VERSION CHECK ----------------
    "Refresh" reloads data only. When a new file is uploaded to GitHub, this
    notices it (by APP_VERSION) and offers to load the new version. */
-const APP_VERSION = '2026-10-02.1';
+const APP_VERSION = '2026-10-02.2';
 let updShown = false;
 async function checkForUpdate(){
   try{
@@ -1242,6 +1289,167 @@ setInterval(checkForUpdate, 30 * 60 * 1000);
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') checkForUpdate(); });
 setTimeout(checkForUpdate, 5000);
 const nowTime = () => new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
+/* ---------------- STUDENT RECORDS + TOP 10 ---------------- */
+let lbData = null, lbTab = 'live', srProfile = null;
+const fmt1 = v => (v === null || v === undefined || v === '') ? '—' : String(v);
+const pctTxt = v => (v === null || v === undefined) ? '—' : `${v}%`;
+const srDate = d => d ? new Date(d).toLocaleDateString('en-IN', { day:'2-digit', month:'short', year:'numeric' }) : '—';
+async function openStudentsSection(){
+  showView('view-students');
+  srLoadLeaderboards();
+  setTimeout(() => document.getElementById('sr-q').focus(), 200);
+}
+async function srLoadLeaderboards(){
+  const el = document.getElementById('lb-out');
+  el.innerHTML = '<div class="spin"></div>';
+  try{
+    const r = await rpc('admin_leaderboards', adminCreds());
+    if (!r || !r.ok){ el.innerHTML = '<div class="empty-state">Unable to load the top students.</div>'; return; }
+    lbData = r; srRenderLeaderboard();
+  }catch(_e){ el.innerHTML = '<div class="empty-state">Connection error.</div>'; }
+}
+function srRenderLeaderboard(){
+  const el = document.getElementById('lb-out'), rows = (lbData && lbData[lbTab]) || [], rules = (lbData && lbData.rules) || {};
+  document.querySelectorAll('#lb-tabs .sr-tab').forEach(b => b.classList.toggle('on', b.dataset.lb === lbTab));
+  const note = { live: `Ranked by average score across all live exams (at least ${rules.live_min || 1} exam).`,
+                 mock: `Ranked by average score across mock tests (at least ${rules.mock_min || 2} mock tests).`,
+                 practice: `Ranked by practice accuracy (at least ${rules.practice_min || 50} questions attempted).` }[lbTab];
+  document.getElementById('lb-note').textContent = note;
+  if (!rows.length){ el.innerHTML = '<div class="empty-state" style="padding:24px 10px;">No students qualify yet.</div>'; return; }
+  const medal = i => ['🥇', '🥈', '🥉'][i] || (i + 1);
+  const extra = x => lbTab === 'live' ? `${x.count} exam${x.count == 1 ? '' : 's'} · avg ${x.avg_marks} marks`
+                   : lbTab === 'mock' ? `${x.count} mock tests · ${x.questions} questions`
+                   : `${x.correct}/${x.attempted} correct`;
+  el.innerHTML = rows.map((x, i) => `<div class="lb-row" data-m="${esc(x.mobile)}">
+      <span class="lb-rank">${medal(i)}</span>
+      <span class="lb-name"><b>${esc(x.name)}</b><span class="sr-sub">${esc(x.mobile)} · ${extra(x)}</span></span>
+      <span class="lb-score">${x.score}%</span></div>`).join('');
+}
+document.getElementById('lb-tabs').addEventListener('click', e => { const b = e.target.closest('.sr-tab'); if (!b) return; lbTab = b.dataset.lb; srRenderLeaderboard(); });
+document.getElementById('lb-out').addEventListener('click', e => { const r = e.target.closest('.lb-row'); if (r) srOpenProfile(r.dataset.m); });
+
+let srTimer = null;
+document.getElementById('sr-q').addEventListener('input', () => {
+  clearTimeout(srTimer);
+  srTimer = setTimeout(srSearch, 250);
+});
+async function srSearch(){
+  const q = document.getElementById('sr-q').value.trim(), el = document.getElementById('sr-results');
+  if (q.length < 2){ el.innerHTML = ''; return; }
+  el.innerHTML = '<div class="spin" style="margin:14px auto;"></div>';
+  try{
+    const r = await rpc('admin_student_search', { ...adminCreds(), p_q: q });
+    if (!r || !r.ok){ el.innerHTML = '<div class="empty-state" style="padding:16px;">Unable to search.</div>'; return; }
+    el.innerHTML = r.rows.length ? r.rows.map(s => `<div class="sr-hit" data-m="${esc(s.mobile)}">
+        <b>${esc(s.name)}</b> <span class="sr-sub">${esc(s.mobile)}${s.email ? ' · ' + esc(s.email) : ''}${s.class_name ? ' · ' + esc(s.class_name) : ''}${s.is_approved ? '' : ' · pending approval'}</span></div>`).join('')
+      : '<div class="empty-state" style="padding:16px;">No student found.</div>';
+  }catch(_e){ el.innerHTML = '<div class="empty-state" style="padding:16px;">Connection error.</div>'; }
+}
+document.getElementById('sr-results').addEventListener('click', e => { const h = e.target.closest('.sr-hit'); if (h) srOpenProfile(h.dataset.m); });
+
+async function srOpenProfile(mobile){
+  const el = document.getElementById('sr-profile');
+  el.innerHTML = '<div class="spin"></div>';
+  el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  try{
+    const r = await rpc('admin_student_profile', { ...adminCreds(), p_mobile: mobile });
+    if (!r || !r.ok){ el.innerHTML = `<div class="empty-state">${esc((r && r.error) || 'Unable to load this student.')}</div>`; return; }
+    srProfile = r; srRenderProfile();
+  }catch(_e){ el.innerHTML = '<div class="empty-state">Connection error.</div>'; }
+}
+function srTable(head, rows){
+  return `<div style="overflow-x:auto;"><table class="sr-table"><tr>${head.map(h => `<th>${h}</th>`).join('')}</tr>${rows.join('')}</table></div>`;
+}
+function srRenderProfile(){
+  const r = srProfile, s = r.student, L = r.live || {}, M = r.mock || {}, P = r.practice || {}, C = r.challenge || {};
+  const del = (kind, id) => `<button class="btn btn-sm sr-del" data-k="${kind}" data-id="${id}" title="Delete this record" type="button">🗑</button>`;
+  document.getElementById('sr-profile').innerHTML = `
+    <div class="sr-card">
+      <div style="display:flex; justify-content:space-between; gap:10px; flex-wrap:wrap; align-items:flex-start;">
+        <div><div class="sr-h" style="margin:0;">${esc(s.name)}</div>
+          <div class="sr-sub" style="font-size:13px;">📱 ${esc(s.mobile)}${s.email ? ' · ✉️ ' + esc(s.email) : ' · no email'}</div>
+          <div class="sr-sub">${[s.class_name, s.semester_year, s.university, s.gender].filter(Boolean).map(esc).join(' · ') || 'No class details'}</div>
+          <div class="sr-sub">Joined ${srDate(s.registered_at)} · ${s.self_registered ? 'self-registered' : 'added by admin'} · ${s.is_approved ? '✅ approved' : '⏳ pending approval'}</div></div>
+        <button class="btn btn-sm" id="sr-print" type="button">🖨 Report card</button>
+      </div>
+      <div class="sr-kpis">
+        <div class="stat-box"><div class="sv">${L.count || 0}</div><div class="sk">Live tests</div></div>
+        <div class="stat-box"><div class="sv">${fmt1(L.avg_marks)}</div><div class="sk">Avg live marks</div></div>
+        <div class="stat-box"><div class="sv">${pctTxt(L.avg_pct)}</div><div class="sk">Avg live score</div></div>
+        <div class="stat-box"><div class="sv">${M.count || 0}</div><div class="sk">Mock tests</div></div>
+        <div class="stat-box"><div class="sv">${pctTxt(M.avg_pct)}</div><div class="sk">Avg mock score</div></div>
+        <div class="stat-box"><div class="sv">${P.questions || 0}</div><div class="sk">Practice Qs</div></div>
+        <div class="stat-box"><div class="sv">${pctTxt(P.accuracy)}</div><div class="sk">Practice accuracy</div></div>
+        <div class="stat-box"><div class="sv">${C.points || 0}</div><div class="sk">Challenge points</div></div>
+      </div>
+    </div>
+
+    <div class="sr-card"><div class="sr-h">📝 Live tests <span class="sr-sub">${L.count || 0} taken · ${L.passed || 0} passed · best ${pctTxt(L.best_pct)}</span></div>
+      ${(L.rows || []).length ? srTable(['Exam', 'Date', 'Marks', 'Correct', 'Score', 'Result', ''], L.rows.map(x =>
+        `<tr><td>${esc(x.exam)}</td><td>${srDate(x.at)}</td><td><b>${fmt1(x.marks)}</b></td><td>${x.correct}/${x.total_q}</td><td>${pctTxt(x.pct)}</td>
+         <td style="color:${x.status === 'PASS' ? '#5dcaa5' : '#ff8a7d'}; font-weight:700;">${esc(x.status || '')}</td><td>${del(x.src === 'current' ? 'live_current' : 'live_history', x.id)}</td></tr>`))
+        : '<div class="empty-state" style="padding:16px;">No live tests yet.</div>'}</div>
+
+    <div class="sr-card"><div class="sr-h">🧪 Mock tests <span class="sr-sub">${M.count || 0} taken · ${M.questions || 0} questions · ${M.correct || 0} correct</span></div>
+      ${(r.mock_subjects || []).length ? `<div class="sr-sub" style="margin:4px 0;">Subject-wise</div>` + srTable(['Subject', 'Questions', 'Attempted', 'Correct', 'Score'],
+        r.mock_subjects.map(x => `<tr><td>${esc(x.subject)}</td><td>${x.questions}</td><td>${x.attempted}</td><td>${x.correct}</td><td><b>${pctTxt(x.pct)}</b></td></tr>`)) : ''}
+      ${(M.rows || []).length ? `<div class="sr-sub" style="margin:10px 0 4px;">Each mock test</div>` + srTable(['Date', 'Questions', 'Correct', 'Wrong', 'Marks', 'Score', 'Time', ''], M.rows.map(x =>
+        `<tr><td>${srDate(x.at)}</td><td>${x.total_q}</td><td>${x.correct}</td><td>${x.wrong}</td><td><b>${fmt1(x.marks)}/${fmt1(x.max)}</b></td><td>${pctTxt(x.pct)}</td>
+         <td>${x.secs ? Math.round(x.secs / 60) + ' min' : '—'}</td><td>${del('mock', x.id)}</td></tr>`))
+        : '<div class="empty-state" style="padding:16px;">No mock tests yet.</div>'}</div>
+
+    <div class="sr-card"><div class="sr-h">📚 Practice <span class="sr-sub">${P.sessions || 0} sessions · ${P.attempted || 0} attempted · ${P.correct || 0} correct</span></div>
+      ${(r.practice_subjects || []).length ? srTable(['Subject', 'Sessions', 'Questions', 'Attempted', 'Correct', 'Accuracy'],
+        r.practice_subjects.map(x => `<tr><td>${esc(x.subject)}</td><td>${x.sessions}</td><td>${x.questions}</td><td>${x.attempted}</td><td>${x.correct}</td><td><b>${pctTxt(x.accuracy)}</b></td></tr>`)) : ''}
+      ${(r.practice_recent || []).length ? `<div class="sr-sub" style="margin:10px 0 4px;">Recent sessions (latest 50)</div>` + srTable(['Date', 'Subject → Topic', 'Level', 'Questions', 'Correct', 'Score', ''], r.practice_recent.map(x =>
+        `<tr><td>${esc(String(x.date || '').slice(0, 10))}</td><td>${esc(x.subject || '')} → ${esc(x.topic || '')}</td><td>${esc(x.level || '')}</td><td>${x.attempted}/${x.total_q}</td><td>${x.correct}</td><td>${pctTxt(x.pct)}</td><td>${del('practice', x.id)}</td></tr>`))
+        : '<div class="empty-state" style="padding:16px;">No practice yet.</div>'}</div>
+
+    <div class="sr-card sr-danger"><div class="sr-h">⚠️ Delete all activity</div>
+      <div class="sr-sub" style="margin-bottom:8px;">Permanently deletes this student's live-test results, mock tests, practice sessions and daily-challenge attempts. The student's account is kept and can still sign in. Records can be deleted, never edited, and every deletion is logged.</div>
+      <button class="btn btn-sm" id="sr-del-all" type="button" style="border-color:#e74c3c; color:#ff8a7d;">🗑 Delete all activity…</button></div>`;
+  document.getElementById('sr-print').addEventListener('click', srPrint);
+  document.getElementById('sr-del-all').addEventListener('click', async () => {
+    const typed = prompt(`Delete ALL activity records of ${s.name}?\n\nThis cannot be undone. To confirm, type the student's mobile number:`);
+    if (typed === null) return;
+    const res = await rpc('admin_student_delete_record', { ...adminCreds(), p_mobile: s.mobile, p_kind: 'all', p_id: null, p_confirm: typed.trim() });
+    if (res && res.ok){ toast(`${res.deleted} record(s) deleted.`, 'ok'); srOpenProfile(s.mobile); srLoadLeaderboards(); }
+    else toast((res && res.error) || 'Unable to delete.', 'err');
+  });
+}
+document.getElementById('sr-profile').addEventListener('click', async (e) => {
+  const b = e.target.closest('.sr-del'); if (!b || !srProfile) return;
+  const label = { practice: 'practice session', mock: 'mock test', live_current: 'live-test result', live_history: 'live-test result' }[b.dataset.k];
+  if (!confirm(`Delete this ${label} of ${srProfile.student.name}?\n\nThis cannot be undone. It does not change your plan's live-test count.`)) return;
+  b.disabled = true;
+  const res = await rpc('admin_student_delete_record', { ...adminCreds(), p_mobile: srProfile.student.mobile, p_kind: b.dataset.k, p_id: Number(b.dataset.id), p_confirm: null });
+  if (res && res.ok){ toast('Record deleted.', 'ok'); srOpenProfile(srProfile.student.mobile); srLoadLeaderboards(); }
+  else { toast((res && res.error) || 'Unable to delete.', 'err'); b.disabled = false; }
+});
+function srPrint(){
+  const r = srProfile, s = r.student, L = r.live || {}, M = r.mock || {}, P = r.practice || {};
+  const inst = ((document.querySelector('.brand-l .name') || {}).textContent || '').replace(/\s*—\s*Control Panel\s*$/, '');
+  const t = (h, rows) => `<table><tr>${h.map(x => `<th>${x}</th>`).join('')}</tr>${rows.join('')}</table>`;
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Report card — ${esc(s.name)}</title><style>
+    @page{ size:A4; margin:14mm; } body{ font-family:Arial, sans-serif; color:#1b2a41; font-size:12px; }
+    h1{ font-size:20px; margin:0; } h2{ font-size:14px; margin:16px 0 6px; } .sub{ color:#666; }
+    .k{ display:grid; grid-template-columns:repeat(4, 1fr); gap:8px; margin:12px 0; } .k div{ border:1px solid #dfe5ee; border-radius:8px; padding:8px; text-align:center; } .k b{ display:block; font-size:16px; }
+    table{ width:100%; border-collapse:collapse; } th{ background:#1b2a41; color:#fff; padding:5px; text-align:left; font-size:11px; } td{ padding:5px; border-bottom:1px solid #e3e7ee; }
+    tr{ page-break-inside:avoid; }</style></head><body>
+    <h1>${esc(inst || 'Institute')} — Student report card</h1>
+    <div class="sub">Generated ${esc(new Date().toLocaleString('en-IN'))}</div>
+    <h2>${esc(s.name)}</h2>
+    <div>Mobile: ${esc(s.mobile)}${s.email ? ' · Email: ' + esc(s.email) : ''}${s.class_name ? ' · ' + esc(s.class_name) : ''}${s.semester_year ? ' · ' + esc(s.semester_year) : ''}</div>
+    <div class="k"><div>Live tests<b>${L.count || 0}</b>avg ${pctTxt(L.avg_pct)}</div><div>Avg live marks<b>${fmt1(L.avg_marks)}</b>${L.passed || 0} passed</div>
+      <div>Mock tests<b>${M.count || 0}</b>avg ${pctTxt(M.avg_pct)}</div><div>Practice<b>${P.questions || 0} Qs</b>accuracy ${pctTxt(P.accuracy)}</div></div>
+    <h2>Live tests</h2>${(L.rows || []).length ? t(['Exam', 'Date', 'Marks', 'Correct', 'Score', 'Result'], L.rows.map(x => `<tr><td>${esc(x.exam)}</td><td>${srDate(x.at)}</td><td>${fmt1(x.marks)}</td><td>${x.correct}/${x.total_q}</td><td>${pctTxt(x.pct)}</td><td>${esc(x.status || '')}</td></tr>`)) : '<p>None.</p>'}
+    <h2>Mock tests — subject-wise</h2>${(r.mock_subjects || []).length ? t(['Subject', 'Questions', 'Correct', 'Score'], r.mock_subjects.map(x => `<tr><td>${esc(x.subject)}</td><td>${x.questions}</td><td>${x.correct}</td><td>${pctTxt(x.pct)}</td></tr>`)) : '<p>None.</p>'}
+    <h2>Practice — subject-wise</h2>${(r.practice_subjects || []).length ? t(['Subject', 'Questions', 'Attempted', 'Correct', 'Accuracy'], r.practice_subjects.map(x => `<tr><td>${esc(x.subject)}</td><td>${x.questions}</td><td>${x.attempted}</td><td>${x.correct}</td><td>${pctTxt(x.accuracy)}</td></tr>`)) : '<p>None.</p>'}
+    </body></html>`;
+  const w = window.open('', '_blank'); if (!w){ toast('Please allow pop-ups to print.', 'err'); return; }
+  w.document.write(html); w.document.close(); w.focus(); setTimeout(() => w.print(), 300);
+}
 
 /* ---------------- TERMS & CONDITIONS (must be accepted; readable any time) ---------------- */
 function renderTermsText(text){
@@ -1819,6 +2027,7 @@ document.getElementById('menu-support').addEventListener('click', openSupportSec
 document.getElementById('menu-history').addEventListener('click', openHistorySection);
 document.getElementById('menu-platform-msgs').addEventListener('click', openPlatformMessages);
 document.getElementById('menu-terms').addEventListener('click', openTermsSection);
+document.getElementById('menu-students').addEventListener('click', openStudentsSection);
 document.getElementById('pm-banner').addEventListener('click', openPlatformMessages);
 document.getElementById('menu-settings').addEventListener('click', async () => {
   const el = document.getElementById('rst-noemail');
