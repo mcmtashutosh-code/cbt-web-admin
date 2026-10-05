@@ -748,9 +748,24 @@
 
     <div class="ctab-panel active" id="mpanel-notice">
       <label class="field-label">New notice</label>
-      <textarea id="ntc-message" placeholder="Type an announcement for all students..." style="min-height:70px;"></textarea>
+      <textarea id="ntc-message" placeholder="Type an announcement..." style="min-height:70px;"></textarea>
+      <label class="field-label" style="margin-top:12px;">Send to</label>
+      <div style="display:flex; gap:18px; flex-wrap:wrap; font-size:13.5px;">
+        <label style="display:flex; gap:6px; align-items:center;"><input type="radio" name="ntc-aud" value="all" checked style="width:auto;"> 👥 All students</label>
+        <label style="display:flex; gap:6px; align-items:center;"><input type="radio" name="ntc-aud" value="some" style="width:auto;"> 👤 Selected students</label>
+      </div>
+      <div id="ntc-pick" style="display:none; margin-top:8px; border:1px solid var(--line-soft); border-radius:12px; padding:10px;">
+        <input id="ntc-search" type="search" placeholder="Search by name, mobile or email…" autocomplete="off">
+        <div id="ntc-search-res"></div>
+        <details style="margin-top:8px;"><summary style="font-size:12.5px; cursor:pointer; color:var(--text-mute);">Or paste mobile numbers</summary>
+          <textarea id="ntc-paste" placeholder="One per line, or separated by commas" style="min-height:60px; margin-top:6px;"></textarea>
+          <button class="btn btn-ghost btn-sm" id="btn-ntc-paste" type="button" style="margin-top:6px;">➕ Add these numbers</button>
+        </details>
+        <div id="ntc-chosen" style="display:flex; flex-wrap:wrap; gap:6px; margin-top:8px;"></div>
+        <div id="ntc-chosen-n" style="font-size:12px; color:var(--text-mute); margin-top:4px;">No student selected yet.</div>
+      </div>
       <label style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-top:10px; font-size:13.5px;">
-        <input type="checkbox" id="ntc-banner" style="width:auto;"> 📢 Also show as a scrolling banner to students until
+        <input type="checkbox" id="ntc-banner" style="width:auto;"> 📢 Also show as a scrolling banner to these students until
         <input type="date" id="ntc-banner-until" style="width:auto; padding:6px 8px;">
       </label>
       <div style="font-size:11.5px; color:var(--text-mute); margin-top:4px;">The banner runs at the top of the students' home screen (first 300 characters) and stops by itself after this date.</div>
@@ -1276,7 +1291,7 @@ function esc(s){ const d=document.createElement('div'); d.textContent = s==null?
 /* ---------------- NEW VERSION CHECK ----------------
    "Refresh" reloads data only. When a new file is uploaded to GitHub, this
    notices it (by APP_VERSION) and offers to load the new version. */
-const APP_VERSION = '2026-10-04.1';
+const APP_VERSION = '2026-10-04.2';
 let updShown = false;
 async function checkForUpdate(){
   try{
@@ -1353,7 +1368,7 @@ async function loadAdminBanners(){
     // the institute's own running banners (Notices screen)
     const el = document.getElementById('bnr-list');
     el.innerHTML = (r.mine || []).length ? r.mine.map(b => `<div class="sup-item" style="cursor:default; display:flex; gap:10px; align-items:center; justify-content:space-between;">
-        <div><div class="sup-subj" style="font-size:13.5px;">📢 ${esc(b.message)}</div><div class="sup-meta">Running until ${bnrDate(b.ends_at)}</div></div>
+        <div><div class="sup-subj" style="font-size:13.5px;">📢 ${esc(b.message)}</div><div class="sup-meta">Running until ${bnrDate(b.ends_at)} · ${b.recipients ? b.recipients + ' student' + (b.recipients === 1 ? '' : 's') : 'all students'}</div></div>
         <button class="btn btn-sm bnr-stop" data-id="${b.id}" type="button" style="flex:none;">Stop</button></div>`).join('')
       : '<div style="font-size:12.5px; color:var(--text-mute);">No banner is running. Tick the box above when posting a notice to show it as a banner.</div>';
   }catch(_e){}
@@ -1373,6 +1388,60 @@ document.getElementById('menu-messages').addEventListener('click', () => loadAdm
   const h = document.createElement('div'); h.id = 'adm-tkr';
   sub.parentNode.insertBefore(h, sub.nextSibling);
 })();
+/* ---------------- NOTICE AUDIENCE: all, several or one student ---------------- */
+const ntcChosen = new Map();   // mobile -> name
+function ntcAudSome(){ return document.querySelector('input[name="ntc-aud"]:checked').value === 'some'; }
+function ntcRenderChosen(){
+  const el = document.getElementById('ntc-chosen');
+  el.innerHTML = [...ntcChosen].map(([m, n]) => `<span style="display:inline-flex; gap:6px; align-items:center; background:var(--field, rgba(255,255,255,.06)); border:1px solid var(--line-soft); border-radius:14px; padding:4px 10px; font-size:12.5px;">
+      ${n ? esc(n) + ' <span style="color:var(--text-mute);">' + esc(m) + '</span>' : esc(m)}<button type="button" class="ntc-rm" data-m="${esc(m)}" style="background:none; border:0; color:var(--text-mute); cursor:pointer; font-size:14px;">×</button></span>`).join('');
+  document.getElementById('ntc-chosen-n').textContent = ntcChosen.size ? `${ntcChosen.size} student${ntcChosen.size === 1 ? '' : 's'} selected` : 'No student selected yet.';
+}
+document.querySelectorAll('input[name="ntc-aud"]').forEach(r => r.addEventListener('change', () => {
+  document.getElementById('ntc-pick').style.display = ntcAudSome() ? 'block' : 'none';
+  if (ntcAudSome()) setTimeout(() => document.getElementById('ntc-search').focus(), 100);
+}));
+let ntcTimer = null;
+document.getElementById('ntc-search').addEventListener('input', () => {
+  clearTimeout(ntcTimer);
+  ntcTimer = setTimeout(async () => {
+    const q = document.getElementById('ntc-search').value.trim(), el = document.getElementById('ntc-search-res');
+    if (q.length < 2){ el.innerHTML = ''; return; }
+    try{
+      const r = await rpc('admin_student_search', { ...adminCreds(), p_q: q });
+      el.innerHTML = r && r.ok && r.rows.length ? r.rows.slice(0, 8).map(s => `<div class="sr-hit ntc-add" data-m="${esc(s.mobile)}" data-n="${esc(s.name)}" style="display:flex; justify-content:space-between; gap:8px;">
+          <span><b>${esc(s.name)}</b> <span class="sr-sub">${esc(s.mobile)}${s.class_name ? ' · ' + esc(s.class_name) : ''}</span></span><span style="color:var(--accent-text); font-weight:700;">${ntcChosen.has(s.mobile) ? '✓' : '+ Add'}</span></div>`).join('')
+        : '<div style="font-size:12.5px; color:var(--text-mute); padding:6px;">No student found.</div>';
+    }catch(_e){ el.innerHTML = ''; }
+  }, 250);
+});
+document.getElementById('ntc-search-res').addEventListener('click', (e) => {
+  const h = e.target.closest('.ntc-add'); if (!h) return;
+  ntcChosen.set(h.dataset.m, h.dataset.n); ntcRenderChosen();
+  h.lastElementChild.textContent = '✓';
+});
+document.getElementById('ntc-chosen').addEventListener('click', (e) => {
+  const b = e.target.closest('.ntc-rm'); if (!b) return; ntcChosen.delete(b.dataset.m); ntcRenderChosen();
+});
+document.getElementById('btn-ntc-paste').addEventListener('click', () => {
+  const nums = document.getElementById('ntc-paste').value.split(/[\s,;]+/).map(x => x.replace(/\D/g, '')).filter(x => x.length === 10);
+  nums.forEach(m => { if (!ntcChosen.has(m)) ntcChosen.set(m, ''); });
+  document.getElementById('ntc-paste').value = '';
+  ntcRenderChosen();
+  toast(nums.length ? `${nums.length} number${nums.length === 1 ? '' : 's'} added.` : 'No 10-digit mobile numbers found.', nums.length ? 'ok' : 'err');
+});
+// Who each posted notice went to
+async function ntcFillAudiences(){
+  try{
+    const r = await rpc('admin_notice_audiences', adminCreds());
+    const map = (r && r.ok && r.audiences) || {};
+    document.querySelectorAll('[data-ntc-aud]').forEach(el => {
+      const a = map[el.dataset.ntcAud];
+      el.textContent = a ? `👤 ${a.count} student${a.count === 1 ? '' : 's'}: ${a.names.slice(0, 3).join(', ')}${a.names.length > 3 ? ' +' + (a.names.length - 3) : ''}` : '👥 All students';
+    });
+  }catch(_e){}
+}
+
 /* ---------------- STUDENT RECORDS + TOP 10 ---------------- */
 let lbData = null, lbTab = 'live', srProfile = null;
 const fmt1 = v => (v === null || v === undefined || v === '') ? '—' : String(v);
@@ -4029,7 +4098,8 @@ async function loadNotices(){
       card.innerHTML = `
         <div class="ch-manage-q" id="ntc-view-${n.id}">${esc(n.message)}</div>
         <textarea id="ntc-edit-${n.id}" style="display:none; min-height:60px; margin-bottom:8px;">${esc(n.message)}</textarea>
-        <div class="ms" style="margin:2px 0 8px;">${esc((n.created_at||'').slice(0,16).replace('T',' '))} · ${n.is_active ? 'Active' : 'Hidden'}</div>
+        <div class="ms" style="margin:2px 0 2px;">${esc((n.created_at||'').slice(0,16).replace('T',' '))} · ${n.is_active ? 'Active' : 'Hidden'}</div>
+        <div class="ms" data-ntc-aud="${n.id}" style="margin:0 0 8px; color:var(--accent-text);">👥 All students</div>
         <div style="display:flex; gap:8px;">
           <button class="btn btn-ghost btn-sm btn-ntc-edit" style="flex:1;">✏️ Edit</button>
           <button class="btn btn-ghost btn-sm btn-ntc-toggle" style="flex:1;">${n.is_active ? '🙈 Hide' : '👁 Show'}</button>
@@ -4074,6 +4144,7 @@ async function loadNotices(){
       });
       list.appendChild(card);
     });
+    ntcFillAudiences();
   }catch(err){
     list.innerHTML = `<div class="empty-state">Unable to load notices.<br><span style="color:#e74c3c; font-size:11px;">${esc(err.message||'')}</span></div>`;
   }
@@ -4084,19 +4155,25 @@ document.getElementById('btn-post-notice').addEventListener('click', async () =>
   const errEl = document.getElementById('ntc-err');
   errEl.textContent = '';
   if (!msg){ errEl.textContent = 'Please enter the notice message.'; return; }
+  const targets = ntcAudSome() ? [...ntcChosen.keys()] : null;
+  if (targets && !targets.length){ errEl.textContent = 'Choose at least one student, or send to all students.'; return; }
   const btn = document.getElementById('btn-post-notice');
   btn.disabled = true; btn.textContent = 'Posting...';
   try{
-    const ok = await rpc('admin_post_notice', { p_admin_id: admin.adminId, p_admin_pass: admin.adminPass, p_message: msg });
+    const pr = await rpc('admin_post_notice_to', { ...adminCreds(), p_message: msg, p_mobiles: targets });
+    const ok = !!(pr && pr.ok);
+    if (!ok){ errEl.textContent = (pr && pr.error) || 'Unable to post the notice.'; return; }
     if (ok && document.getElementById('ntc-banner').checked){
-      const br = await rpc('admin_banner_add', { ...adminCreds(), p_message: msg.slice(0, 300), p_until: document.getElementById('ntc-banner-until').value });
+      const br = await rpc('admin_banner_add', { ...adminCreds(), p_message: msg.slice(0, 300), p_until: document.getElementById('ntc-banner-until').value, p_mobiles: targets });
       if (br && br.ok){ toast('Notice posted and banner started.', 'ok'); document.getElementById('ntc-banner').checked = false; }
       else toast('Notice posted, but the banner was not started: ' + ((br && br.error) || 'please try again.'), 'err');
       loadAdminBanners();
     }
     if (ok){
-      toast('Notice posted.', 'ok');
+      toast(targets ? `Notice sent to ${targets.length} student${targets.length === 1 ? '' : 's'}.` : 'Notice posted for all students.', 'ok');
       document.getElementById('ntc-message').value = '';
+      ntcChosen.clear(); ntcRenderChosen(); document.getElementById('ntc-search').value = ''; document.getElementById('ntc-search-res').innerHTML = '';
+      document.querySelector('input[name="ntc-aud"][value="all"]').checked = true; document.getElementById('ntc-pick').style.display = 'none';
       loadNotices();
     } else {
       errEl.textContent = 'Unable to post the notice.';
