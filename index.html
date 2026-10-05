@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
-<title>CBT Admin Dashboard</title>
+<title>Admin Dashboard — Dhyeodaya</title>
 <link rel="manifest" href="manifest-admin.json">
 <meta name="theme-color" content="#2980b9">
 <link rel="apple-touch-icon" href="admin-icon-180.png">
@@ -140,6 +140,17 @@
     .menu-card .mt{font-size:13px;}
     .menu-card .ms{display:none;}
   }
+  /* scrolling announcement banner */
+  .tkr{display:flex; align-items:center; gap:8px; background:linear-gradient(90deg, #138a72, #16a085); color:#fff; border-radius:12px; padding:8px 10px; margin:10px 0 12px; cursor:pointer; overflow:hidden;}
+  .tkr .tk-ic{flex:none; font-size:16px;}
+  .tkr .tk-vp{flex:1; overflow:hidden; white-space:nowrap; -webkit-mask-image:linear-gradient(90deg, transparent, #000 3%, #000 97%, transparent); mask-image:linear-gradient(90deg, transparent, #000 3%, #000 97%, transparent);}
+  .tkr .tk-tx{display:inline-block; padding-left:100%; font-size:13.5px; font-weight:600; animation:tkmove var(--tkdur, 18s) linear infinite;}
+  .tkr.paused .tk-tx{animation-play-state:paused;}
+  .tkr.open .tk-vp{white-space:normal; -webkit-mask-image:none; mask-image:none;}
+  .tkr.open .tk-tx{animation:none; padding-left:0; display:block; line-height:1.5;}
+  .tkr .tk-x{flex:none; background:transparent; border:0; color:#fff; font-size:16px; cursor:pointer; padding:0 2px; opacity:.85;}
+  @keyframes tkmove{from{transform:translateX(0);} to{transform:translateX(-100%);}}
+  @media (prefers-reduced-motion: reduce){ .tkr .tk-tx{animation:none; padding-left:0;} .tkr .tk-vp{white-space:normal; -webkit-mask-image:none; mask-image:none;} }
   .sr-card{background:var(--card); border:1px solid var(--line-soft); border-radius:var(--radius); padding:14px 16px; margin-top:12px;}
   .sr-h{font-size:15px; font-weight:800; margin-bottom:8px;} .sr-sub{display:block; font-size:12px; color:var(--text-mute); font-weight:400;}
   .sr-h .sr-sub{display:inline; margin-left:6px;}
@@ -297,7 +308,7 @@
       <div class="error-text" id="login-error"></div>
       <button class="btn btn-primary" id="btn-login" style="margin-top:6px;">Sign in</button>
     </div>
-    <div class="footer"><span class="lock">Secured by CBT Assessment Platform</span> · Cloud-hosted<br>© 2025 Ashutosh Dubey · All Rights Reserved</div>
+    <div class="footer"><span class="lock">Powered by <b>Dhyeodaya</b></span> · तैयारी से सफलता तक<br>© 2026 Dhyeodaya · All Rights Reserved</div>
   </div>
 
   <!-- ============ MENU ============ -->
@@ -435,7 +446,7 @@
         <div class="ms">Duration, marks, passing criteria, section-wise question count</div>
       </div>
     </div>
-    <div class="footer"><span class="lock">Secured by CBT Assessment Platform</span> · Cloud-hosted<br>© 2025 Ashutosh Dubey · All Rights Reserved</div>
+    <div class="footer"><span class="lock">Powered by <b>Dhyeodaya</b></span> · तैयारी से सफलता तक<br>© 2026 Dhyeodaya · All Rights Reserved</div>
   </div>
 
   <!-- ============ FEEDBACK MANAGEMENT ============ -->
@@ -453,7 +464,7 @@
     </div>
 
     <div id="fb-list"><div class="spin"></div></div>
-    <div class="footer"><span class="lock">Secured by CBT Assessment Platform</span> · Cloud-hosted<br>© 2025 Ashutosh Dubey · All Rights Reserved</div>
+    <div class="footer"><span class="lock">Powered by <b>Dhyeodaya</b></span> · तैयारी से सफलता तक<br>© 2026 Dhyeodaya · All Rights Reserved</div>
   </div>
 
   <!-- ============ CHALLENGE MANAGEMENT ============ -->
@@ -723,7 +734,7 @@
     <div class="ctab-panel" id="preg-panel-all">
       <div id="allselfreg-list" style="margin-top:16px;"><div class="spin"></div></div>
     </div>
-    <div class="footer"><span class="lock">Secured by CBT Assessment Platform</span> · Cloud-hosted<br>© 2025 Ashutosh Dubey · All Rights Reserved</div>
+    <div class="footer"><span class="lock">Powered by <b>Dhyeodaya</b></span> · तैयारी से सफलता तक<br>© 2026 Dhyeodaya · All Rights Reserved</div>
   </div>
 
   <div class="view" id="view-messages">
@@ -738,8 +749,15 @@
     <div class="ctab-panel active" id="mpanel-notice">
       <label class="field-label">New notice</label>
       <textarea id="ntc-message" placeholder="Type an announcement for all students..." style="min-height:70px;"></textarea>
+      <label style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-top:10px; font-size:13.5px;">
+        <input type="checkbox" id="ntc-banner" style="width:auto;"> 📢 Also show as a scrolling banner to students until
+        <input type="date" id="ntc-banner-until" style="width:auto; padding:6px 8px;">
+      </label>
+      <div style="font-size:11.5px; color:var(--text-mute); margin-top:4px;">The banner runs at the top of the students' home screen (first 300 characters) and stops by itself after this date.</div>
       <div class="error-text" id="ntc-err"></div>
       <button class="btn btn-primary" id="btn-post-notice" style="margin:10px 0 22px;">📢 Post notice</button>
+      <label class="field-label">Running banners</label>
+      <div id="bnr-list" style="margin-bottom:18px;"></div>
       <label class="field-label">Posted notices</label>
       <div id="ntc-list"><div class="spin"></div></div>
     </div>
@@ -768,7 +786,7 @@
       <div id="msg-threads-list"><div class="spin"></div></div>
     </div>
 
-    <div class="footer"><span class="lock">Secured by CBT Assessment Platform</span> · Cloud-hosted<br>© 2025 Ashutosh Dubey · All Rights Reserved</div>
+    <div class="footer"><span class="lock">Powered by <b>Dhyeodaya</b></span> · तैयारी से सफलता तक<br>© 2026 Dhyeodaya · All Rights Reserved</div>
   </div>
 
   <!-- ============ ADMIN CREDENTIALS ============ -->
@@ -1258,7 +1276,7 @@ function esc(s){ const d=document.createElement('div'); d.textContent = s==null?
 /* ---------------- NEW VERSION CHECK ----------------
    "Refresh" reloads data only. When a new file is uploaded to GitHub, this
    notices it (by APP_VERSION) and offers to load the new version. */
-const APP_VERSION = '2026-10-02.3';
+const APP_VERSION = '2026-10-04.1';
 let updShown = false;
 async function checkForUpdate(){
   try{
@@ -1291,6 +1309,70 @@ document.addEventListener('visibilitychange', () => { if (document.visibilitySta
 setTimeout(checkForUpdate, 5000);
 const nowTime = () => new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
+/* ---------------- SCROLLING ANNOUNCEMENT BANNER ----------------
+   Tap: pause and show the whole message; tap again: continue. */
+function renderTicker(holder, items, opts){
+  opts = opts || {};
+  holder.innerHTML = '';
+  if (!items || !items.length) return;
+  const esc0 = v => String(v == null ? '' : v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const text = items.map(x => esc0(x.message)).join('&nbsp;&nbsp;&nbsp;•&nbsp;&nbsp;&nbsp;');
+  const plain = items.map(x => x.message).join('   •   ');
+  const el = document.createElement('div');
+  el.className = 'tkr'; el.setAttribute('role', 'status');
+  el.title = 'Tap to read the whole message';
+  el.innerHTML = `<span class="tk-ic">${opts.icon || '📢'}</span><div class="tk-vp"><span class="tk-tx">${opts.prefix ? '<b>' + esc0(opts.prefix) + '</b>&nbsp; ' : ''}${text}</span></div>`
+    + (opts.onClose ? '<button class="tk-x" type="button" aria-label="Hide for today">×</button>' : '');
+  el.style.setProperty('--tkdur', Math.max(12, Math.min(60, Math.round(plain.length / 5))) + 's');
+  el.addEventListener('click', (e) => {
+    if (e.target.closest('.tk-x')){ e.stopPropagation(); opts.onClose(); return; }
+    el.classList.toggle('open');
+  });
+  holder.appendChild(el);
+}
+
+const bnrDate = d => new Date(d).toLocaleDateString('en-IN', { day:'2-digit', month:'short', year:'numeric' });
+function isoPlus(n){ const d = new Date(Date.now() + 5.5*3600e3 + n*86400e3); return d.toISOString().slice(0, 10); }
+document.getElementById('ntc-banner-until').value = isoPlus(3);
+document.getElementById('ntc-banner-until').min = isoPlus(0);
+document.getElementById('ntc-banner-until').max = isoPlus(60);
+async function loadAdminBanners(){
+  try{
+    const r = await rpc('admin_banners', adminCreds());
+    if (!r || !r.ok) return;
+    // Dhyeodaya banners for this institute (hidden for today if the admin closed them)
+    const today = isoPlus(0);
+    const visible = (r.platform || []).filter(b => { try{ return localStorage.getItem('adm_bnr_hide_' + b.id) !== today; }catch(_e){ return true; } });
+    // keep the banner at the very top of the home screen (above Institute overview)
+    const tk = document.getElementById('adm-tkr'), sub0 = document.querySelector('#view-menu .section-sub');
+    if (tk && sub0 && tk.previousElementSibling !== sub0) sub0.after(tk);
+    renderTicker(document.getElementById('adm-tkr'), visible, { prefix: 'Dhyeodaya:', onClose: () => {
+      visible.forEach(b => { try{ localStorage.setItem('adm_bnr_hide_' + b.id, today); }catch(_e){} });
+      document.getElementById('adm-tkr').innerHTML = '';
+    } });
+    // the institute's own running banners (Notices screen)
+    const el = document.getElementById('bnr-list');
+    el.innerHTML = (r.mine || []).length ? r.mine.map(b => `<div class="sup-item" style="cursor:default; display:flex; gap:10px; align-items:center; justify-content:space-between;">
+        <div><div class="sup-subj" style="font-size:13.5px;">📢 ${esc(b.message)}</div><div class="sup-meta">Running until ${bnrDate(b.ends_at)}</div></div>
+        <button class="btn btn-sm bnr-stop" data-id="${b.id}" type="button" style="flex:none;">Stop</button></div>`).join('')
+      : '<div style="font-size:12.5px; color:var(--text-mute);">No banner is running. Tick the box above when posting a notice to show it as a banner.</div>';
+  }catch(_e){}
+}
+document.getElementById('bnr-list').addEventListener('click', async (e) => {
+  const b = e.target.closest('.bnr-stop'); if (!b) return;
+  if (!confirm('Stop this banner now? The notice itself stays.')) return;
+  b.disabled = true;
+  const r = await rpc('admin_banner_stop', { ...adminCreds(), p_id: Number(b.dataset.id) });
+  toast(r && r.ok ? 'Banner stopped.' : 'Unable to stop the banner.', r && r.ok ? 'ok' : 'err');
+  loadAdminBanners();
+});
+document.getElementById('menu-messages').addEventListener('click', () => loadAdminBanners());
+(function placeAdminTicker(){
+  const menu = document.getElementById('view-menu'); if (!menu) return;
+  const sub = menu.querySelector('.section-sub');
+  const h = document.createElement('div'); h.id = 'adm-tkr';
+  sub.parentNode.insertBefore(h, sub.nextSibling);
+})();
 /* ---------------- STUDENT RECORDS + TOP 10 ---------------- */
 let lbData = null, lbTab = 'live', srProfile = null;
 const fmt1 = v => (v === null || v === undefined || v === '') ? '—' : String(v);
@@ -2012,7 +2094,7 @@ async function doLogin(){
     if (check.institute_name){
       const nm = document.querySelector('.brand-l .name');
       if (nm) nm.textContent = check.institute_name + ' — Control Panel';
-      document.title = check.institute_name + ' — CBT Admin Dashboard';
+      document.title = check.institute_name + ' — Admin Dashboard | Dhyeodaya';
     }
     startSessionWatch();
     showView('view-menu');
@@ -2522,6 +2604,7 @@ async function loadDashboardStats(){
   loadQuotaCard();
   loadPlatformBadge();
   checkTerms();
+  loadAdminBanners();
   try{
     const rows = await rpc('admin_get_dashboard_stats', { p_admin_id: admin.adminId, p_admin_pass: admin.adminPass });
     const s = rows && rows[0];
@@ -3207,7 +3290,7 @@ document.getElementById('btn-export-exam-results').addEventListener('click', asy
 
     sheet.mergeCells('A1:H1');
     const titleCell = sheet.getCell('A1');
-    titleCell.value = exportTitle ? `${exportTitle} — Examination Results` : 'CBT Assessment Platform — Examination Results Report';
+    titleCell.value = exportTitle ? `${exportTitle} — Examination Results` : 'Examination Results Report';
     titleCell.font = { bold: true, size: 16, color: { argb: 'FFFFFFFF' } };
     titleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1B2A41' } };
     titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
@@ -4005,6 +4088,12 @@ document.getElementById('btn-post-notice').addEventListener('click', async () =>
   btn.disabled = true; btn.textContent = 'Posting...';
   try{
     const ok = await rpc('admin_post_notice', { p_admin_id: admin.adminId, p_admin_pass: admin.adminPass, p_message: msg });
+    if (ok && document.getElementById('ntc-banner').checked){
+      const br = await rpc('admin_banner_add', { ...adminCreds(), p_message: msg.slice(0, 300), p_until: document.getElementById('ntc-banner-until').value });
+      if (br && br.ok){ toast('Notice posted and banner started.', 'ok'); document.getElementById('ntc-banner').checked = false; }
+      else toast('Notice posted, but the banner was not started: ' + ((br && br.error) || 'please try again.'), 'err');
+      loadAdminBanners();
+    }
     if (ok){
       toast('Notice posted.', 'ok');
       document.getElementById('ntc-message').value = '';
