@@ -151,6 +151,10 @@
   .tkr .tk-x{flex:none; background:transparent; border:0; color:#fff; font-size:16px; cursor:pointer; padding:0 2px; opacity:.85;}
   @keyframes tkmove{from{transform:translateX(0);} to{transform:translateX(-100%);}}
   @media (prefers-reduced-motion: reduce){ .tkr .tk-tx{animation:none; padding-left:0;} .tkr .tk-vp{white-space:normal; -webkit-mask-image:none; mask-image:none;} }
+  .hist-tbl{width:100%; border-collapse:collapse; font-size:13px; table-layout:auto;}
+  .hist-tbl th{color:var(--text-dim); font-weight:600; padding:8px 6px; text-align:center; white-space:nowrap;}
+  .hist-tbl td{padding:8px 6px; text-align:center; white-space:nowrap; border-top:1px solid var(--line-soft); vertical-align:middle;}
+  .hist-tbl .l{text-align:left; white-space:normal; min-width:120px;}
   .sr-card{background:var(--card); border:1px solid var(--line-soft); border-radius:var(--radius); padding:14px 16px; margin-top:12px;}
   .sr-h{font-size:15px; font-weight:800; margin-bottom:8px;} .sr-sub{display:block; font-size:12px; color:var(--text-mute); font-weight:400;}
   .sr-h .sr-sub{display:inline; margin-left:6px;}
@@ -1291,7 +1295,7 @@ function esc(s){ const d=document.createElement('div'); d.textContent = s==null?
 /* ---------------- NEW VERSION CHECK ----------------
    "Refresh" reloads data only. When a new file is uploaded to GitHub, this
    notices it (by APP_VERSION) and offers to load the new version. */
-const APP_VERSION = '2026-10-04.2';
+const APP_VERSION = '2026-10-06.1';
 let updShown = false;
 async function checkForUpdate(){
   try{
@@ -2460,9 +2464,9 @@ document.getElementById('hist-list').addEventListener('click', async (e) => {
     if (!r || !r.ok){ rowsEl.innerHTML = '<div class="empty-state">Unable to load results.</div>'; return; }
     histRows = r.rows || []; histConfig = r.config || null;
     if (!histRows.length){ rowsEl.innerHTML = '<div class="empty-state">No results for this exam.</div>'; return; }
-    rowsEl.innerHTML = '<div style="overflow-x:auto;"><table style="width:100%; border-collapse:collapse; font-size:13px;">' +
-      '<tr style="color:var(--text-dim); text-align:left;"><th style="padding:6px;">#</th><th>Name</th><th>Mobile</th><th>Correct</th><th>Wrong</th><th>Marks</th><th>Result</th><th></th></tr>' +
-      histRows.map((x, i) => `<tr style="border-top:1px solid var(--line-soft);"><td style="padding:6px;">${i + 1}</td><td>${esc(x.name || '')}</td><td>${esc(maskMobileShare(x.mobile))}</td><td>${x.correct ?? 0}</td><td>${x.wrong ?? 0}</td><td><b>${x.final_marks ?? 0}</b></td><td style="color:${x.exam_status === 'PASS' ? '#5dcaa5' : '#ff8a7d'}; font-weight:700;">${esc(x.exam_status || '')}</td><td><button class="btn btn-danger btn-sm hist-del" data-idx="${i}" title="Delete this result">🗑</button></td></tr>`).join('') +
+    rowsEl.innerHTML = '<div style="overflow-x:auto;"><table class="hist-tbl">' +
+      '<tr><th>#</th><th class="l">Name</th><th>Mobile</th><th>Correct</th><th>Wrong</th><th>Marks</th><th>Result</th><th></th></tr>' +
+      histRows.map((x, i) => `<tr><td>${i + 1}</td><td class="l">${esc(x.name || '')}</td><td>${esc(maskMobileShare(x.mobile))}</td><td>${x.correct ?? 0}</td><td>${x.wrong ?? 0}</td><td><b>${x.final_marks ?? 0}</b></td><td style="color:${x.exam_status === 'PASS' ? '#5dcaa5' : '#ff8a7d'}; font-weight:700;">${esc(x.exam_status || '')}</td><td><button class="btn btn-danger btn-sm hist-del" data-idx="${i}" title="Delete this result">🗑</button></td></tr>`).join('') +
       '</table></div>';
     box.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }catch(err){ rowsEl.innerHTML = '<div class="empty-state">Connection error.</div>'; }
@@ -3263,8 +3267,8 @@ async function loadExamResults(){
 /* ---------------- SHAREABLE RESULTS (masked mobile numbers: first 2 + last 3) ---------------- */
 function maskMobileShare(m){
   const d = String(m || '');
-  if (d.length <= 5) return d;
-  return d.slice(0, 2) + '*'.repeat(d.length - 5) + d.slice(-3);
+  if (d.length <= 3) return d;
+  return '**' + d.slice(-3);
 }
 document.getElementById('btn-export-exam-pdf').addEventListener('click', () => {
   const exportTitle = window.__exportTitle || '';
