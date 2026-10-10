@@ -1295,7 +1295,7 @@ function esc(s){ const d=document.createElement('div'); d.textContent = s==null?
 /* ---------------- NEW VERSION CHECK ----------------
    "Refresh" reloads data only. When a new file is uploaded to GitHub, this
    notices it (by APP_VERSION) and offers to load the new version. */
-const APP_VERSION = '2026-10-06.1';
+const APP_VERSION = '2026-10-10.1';
 let updShown = false;
 async function checkForUpdate(){
   try{
@@ -2493,7 +2493,8 @@ function withHistoryContext(fn){
   lastExamResultsRows = histRows;
   if (histConfig) examConfig = Object.assign({}, c0, histConfig);
   window.__exportTitle = histCurrent ? histCurrent.title : '';
-  try{ fn(); } finally { lastExamResultsRows = r0; examConfig = c0; window.__exportTitle = t0; }
+  window.__exportIsHistory = true;
+  try{ fn(); } finally { lastExamResultsRows = r0; examConfig = c0; window.__exportTitle = t0; window.__exportIsHistory = false; }
 }
 document.getElementById('btn-hist-excel').addEventListener('click', () => {
   if (!histRows.length){ toast('No results to export.', 'err'); return; }
@@ -3270,69 +3271,100 @@ function maskMobileShare(m){
   if (d.length <= 3) return d;
   return '**' + d.slice(-3);
 }
-document.getElementById('btn-export-exam-pdf').addEventListener('click', () => {
+document.getElementById('btn-export-exam-pdf').addEventListener('click', async () => {
+  // Read everything now: for an old exam, withHistoryContext() puts its rows here only for this moment
   const exportTitle = window.__exportTitle || '';
-  if (!lastExamResultsRows.length){
-    toast('No results to export yet.', 'err');
-    return;
-  }
+  const isHistory = !!window.__exportIsHistory;
+  const rows = lastExamResultsRows.slice();
+  const cfg = Object.assign({}, examConfig);
+  if (!rows.length){ toast('No results to export yet.', 'err'); return; }
   const inst = ((document.querySelector('.brand-l .name') || {}).textContent || '')
-    .replace(/\s*—\s*Control Panel\s*$/, '').trim();
-  const list = lastExamResultsRows
-    .map(r => ({ r, ...computeExamStatus(r) }))
+    .replace(/\s*—\s*Control Panel\s*$/, '').trim() || 'Institute';
+
+  // Live sessions: tab switches / fullscreen exits, and students who did not submit (current exam only)
+  let sessions = [];
+  if (!isHistory){
+    try{ sessions = (await rpc('admin_get_live_sessions', { p_admin_id: admin.adminId, p_admin_pass: admin.adminPass })) || []; }catch(_e){ sessions = []; }
+  }
+  const sesBy = {}; sessions.forEach(x => { sesBy[String(x.mobile)] = x; });
+  const submittedSet = new Set(rows.map(r => String(r.mobile)));
+  const notSubmitted = sessions.filter(x => !submittedSet.has(String(x.mobile)) && x.status !== 'Submitted');
+
+  const totalQ = Math.max(0, ...rows.map(r => Number(r.total_q) || 0));
+  const mc = Number(cfg.marks_correct) || 1, mw = Number(cfg.marks_wrong) || 0;
+  const maxMarks = totalQ * mc;
+  const fmtM = v => (Math.round(Number(v || 0) * 100) / 100).toString();
+  const list = rows.map(r => ({ r, ...computeExamStatus(r) }))
     .sort((a, b) => (Number(b.r.final_marks) || 0) - (Number(a.r.final_marks) || 0)
                  || (b.r.correct || 0) - (a.r.correct || 0)
                  || String(a.r.name || '').localeCompare(String(b.r.name || '')));
   let rank = 0, prevMarks = null;
+  const tIST = t => t ? new Date(t).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'Asia/Kolkata' }).toUpperCase() : '-';
   const rowsHtml = list.map((x, i) => {
     const marks = Number(x.r.final_marks) || 0;
     if (marks !== prevMarks){ rank = i + 1; prevMarks = marks; }
+    const c = Number(x.r.correct) || 0, w = Number(x.r.wrong) || 0;
+    const na = Math.max(0, (Number(x.r.total_q) || totalQ) - c - w);
+    const s = sesBy[String(x.r.mobile)];
+    const tab = s ? (Number(s.tab_switch_count) || 0) : 0, fs = s ? (Number(s.fullscreen_exit_count) || 0) : 0;
     return `<tr>
-      <td class="c">${rank}</td>
-      <td>${esc(x.r.name || '')}</td>
-      <td class="c mono">${esc(maskMobileShare(x.r.mobile))}</td>
-      <td class="c">${x.r.correct || 0}</td>
-      <td class="c">${x.r.wrong || 0}</td>
-      <td class="c b">${marks}</td>
-      <td class="c">${x.pct}%</td>
-      <td class="c b ${x.status === 'PASS' ? 'pass' : 'fail'}">${x.status}</td>
-    </tr>`;
+      <td class="c">${rank}</td><td>${esc(x.r.name || '')}</td><td class="c mono">${esc(maskMobileShare(x.r.mobile))}</td>
+      <td class="c">${c}</td><td class="c">${w}</td><td class="c">${na}</td><td class="c b">${fmtM(marks)}</td>
+      <td class="c">${x.pct.toFixed(1)}%</td><td class="c b ${x.status === 'PASS' ? 'pass' : 'fail'}">${x.status}</td>
+      <td class="c">${tIST(x.r.submitted_at)}</td>${isHistory ? '' : `<td class="c">${tab || fs ? tab + ' / ' + fs : '-'}</td>`}</tr>`;
   }).join('');
+
+  const marksArr = list.map(x => Number(x.r.final_marks) || 0);
   const passCount = list.filter(x => x.status === 'PASS').length;
-  const avg = list.length ? Math.round(list.reduce((t, x) => t + x.pct, 0) / list.length * 10) / 10 : 0;
-  const now = new Date();
-  const dateStr = now.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
-  const title = `${inst || 'Institute'} — Exam Results — ${dateStr}`;
-  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${esc(title)}</title>
+  const avg = marksArr.reduce((t, v) => t + v, 0) / (marksArr.length || 1);
+  const firstAt = rows.map(r => r.submitted_at).filter(Boolean).sort()[0];
+  const examDate = (firstAt ? new Date(firstAt) : new Date()).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Asia/Kolkata' });
+  const passTxt = cfg.passing_type === 'Marks'
+    ? `Pass mark: ${fmtM(cfg.passing_value)}/${fmtM(maxMarks)}`
+    : (cfg.passing_value != null ? `Pass mark: ${fmtM(cfg.passing_value)}% (${fmtM(Math.ceil(Number(cfg.passing_value) / 100 * maxMarks * 100) / 100)}/${fmtM(maxMarks)})` : '');
+  const metaLine = [inst, exportTitle, `Exam date: ${examDate}`, `${totalQ} questions`,
+    `+${fmtM(mc)} per correct, ${mw > 0 ? '−' + fmtM(mw) + ' per wrong' : 'no negative marking'}`, passTxt].filter(Boolean).map(esc).join(' &nbsp;|&nbsp; ');
+  const tile = (k, v, cls) => `<div class="tile"><span>${k}</span><b class="${cls || ''}">${v}</b></div>`;
+  const nsHtml = notSubmitted.length ? `<h2>Not submitted (session not finalised)</h2>
+    <table class="ns"><thead><tr><th>Name</th><th class="c">Mobile</th><th class="c">Questions answered (saved)</th></tr></thead><tbody>${
+      notSubmitted.map(x => `<tr><td>${esc(x.name || '—')}</td><td class="c mono">${esc(maskMobileShare(x.mobile))}</td><td class="c">${Number(x.attempted) || 0}</td></tr>`).join('')}</tbody></table>` : '';
+  const genStr = new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Asia/Kolkata' });
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${esc(inst)} — Live Test Result — ${esc(examDate)}</title>
     <style>
-      @page { size: A4; margin: 14mm; }
-      body { font-family: Arial, Helvetica, sans-serif; color: #1b2a41; margin: 0; }
-      h1 { font-size: 20px; margin: 0 0 4px; }
-      .sub { color: #666; font-size: 12px; margin-bottom: 14px; }
-      .sum { display: flex; gap: 18px; font-size: 13px; margin-bottom: 14px; }
-      .sum b { font-size: 15px; }
-      table { width: 100%; border-collapse: collapse; font-size: 12px; }
-      th { background: #1b2a41; color: #fff; padding: 7px 6px; text-align: left; }
-      td { padding: 6px; border-bottom: 1px solid #e3e7ee; }
-      tr:nth-child(even) td { background: #f6f8fb; }
-      .c { text-align: center; } .b { font-weight: bold; } .mono { font-family: 'Courier New', monospace; }
+      @page { size: A4 landscape; margin: 10mm 12mm; }
+      body { font-family: 'Segoe UI', Arial, Helvetica, sans-serif; color: #1b2a41; margin: 0; }
+      h1 { font-size: 22px; margin: 0; text-align: center; color: #1b2a41; }
+      .meta { text-align: center; font-size: 11.5px; color: #4a5568; margin: 4px 0 10px; }
+      .tiles { display: grid; grid-template-columns: repeat(8, 1fr); border: 1px solid #c9d2df; border-radius: 4px; margin-bottom: 12px; }
+      .tile { text-align: center; padding: 5px 4px 6px; border-right: 1px solid #dfe5ee; }
+      .tile:last-child { border-right: 0; }
+      .tile span { display: block; font-size: 10px; color: #5a6878; border-bottom: 1px solid #e6ebf2; padding-bottom: 3px; margin-bottom: 4px; }
+      .tile b { font-size: 17px; } .tile b.g { color: #1e8449; } .tile b.r { color: #c0392b; }
+      h2 { font-size: 14px; margin: 12px 0 6px; color: #1b2a41; }
+      table { width: 100%; border-collapse: collapse; font-size: 11px; }
+      th { background: #1b2a41; color: #fff; padding: 6px 5px; font-size: 10.5px; border: 1px solid #1b2a41; }
+      td { padding: 4px 6px; border: 1px solid #d6dde8; }
+      tbody tr:nth-child(even) td { background: #f4f7fb; }
+      table.ns { width: 52%; } table.ns th { background: #5d6b80; border-color: #5d6b80; text-align: left; }
+      .c { text-align: center !important; } .b { font-weight: bold; } .mono { font-family: 'Courier New', monospace; }
       .pass { color: #1e8449; } .fail { color: #c0392b; }
-      .foot { margin-top: 14px; font-size: 10.5px; color: #888; }
-      tr { page-break-inside: avoid; }
+      thead { display: table-header-group; } tr { page-break-inside: avoid; }
+      .foot { margin-top: 10px; font-size: 9.5px; color: #6b7686; line-height: 1.5; }
     </style></head><body>
-      <h1>${esc(inst || 'Institute')} — ${esc(exportTitle || 'Live Examination Results')}</h1>
-      <div class="sub">Generated on ${esc(dateStr)} · CBT Examination Platform</div>
-      <div class="sum">
-        <div>Students: <b>${list.length}</b></div>
-        <div>Passed: <b>${passCount}</b></div>
-        <div>Not passed: <b>${list.length - passCount}</b></div>
-        <div>Average score: <b>${avg}%</b></div>
+      <h1>Live Test Result</h1>
+      <div class="meta">${metaLine}</div>
+      <div class="tiles">
+        ${tile('Appeared (submitted)', list.length)}${tile('Passed', passCount, 'g')}${tile('Failed', list.length - passCount, 'r')}
+        ${tile('Pass %', (list.length ? Math.round(passCount * 1000 / list.length) / 10 : 0).toFixed(1) + '%')}
+        ${tile('Highest', fmtM(Math.max(...marksArr)) + '/' + fmtM(maxMarks))}${tile('Average', (Math.round(avg * 10) / 10).toFixed(1))}
+        ${tile('Lowest', fmtM(Math.min(...marksArr)) + '/' + fmtM(maxMarks))}${tile('Not submitted', isHistory ? '–' : notSubmitted.length)}
       </div>
-      <table>
-        <thead><tr><th class="c">Rank</th><th>Student name</th><th class="c">Mobile</th><th class="c">Correct</th><th class="c">Wrong</th><th class="c">Marks</th><th class="c">Score</th><th class="c">Result</th></tr></thead>
-        <tbody>${rowsHtml}</tbody>
-      </table>
-      <div class="foot">Mobile numbers are partially hidden to protect student privacy.</div>
+      <h2>Merit list</h2>
+      <table><thead><tr><th>Rank</th><th>Name</th><th>Mobile</th><th>Correct</th><th>Wrong</th><th>Not<br>attempted</th><th>Marks<br>(/${fmtM(maxMarks)})</th><th>%</th><th>Result</th><th>Submitted<br>(IST)</th>${isHistory ? '' : '<th>Tab sw. /<br>FS exits</th>'}</tr></thead>
+        <tbody>${rowsHtml}</tbody></table>
+      ${nsHtml}
+      <div class="foot">Rank is by marks; equal marks share the same rank. 'Not attempted' = ${totalQ} − correct − wrong.${isHistory ? '' : ' Tab sw. / FS exits = tab switches / fullscreen exits recorded during the test.'}
+        Mobile numbers are partly hidden to protect student privacy. Generated on ${esc(genStr)} from the ${esc(inst)} admin panel.</div>
     </body></html>`;
   const frame = document.createElement('iframe');
   frame.style.cssText = 'position:fixed; right:0; bottom:0; width:0; height:0; border:0; visibility:hidden;';
@@ -3344,7 +3376,7 @@ document.getElementById('btn-export-exam-pdf').addEventListener('click', () => {
     frame.contentWindow.print();
     setTimeout(() => frame.remove(), 60000);
   }, 300);
-  toast('Choose "Save as PDF" in the print dialog.', 'ok');
+  toast('Choose "Save as PDF" in the print dialog (Landscape).', 'ok');
 });
 
 document.getElementById('btn-export-exam-results').addEventListener('click', async () => {
