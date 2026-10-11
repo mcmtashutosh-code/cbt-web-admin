@@ -1303,7 +1303,7 @@ function esc(s){ return String(s == null ? '' : s).replace(/&/g,'&amp;').replace
 /* ---------------- NEW VERSION CHECK ----------------
    "Refresh" reloads data only. When a new file is uploaded to GitHub, this
    notices it (by APP_VERSION) and offers to load the new version. */
-const APP_VERSION = '2026-10-11.3';
+const APP_VERSION = '2026-10-11.4';
 let updShown = false;
 async function checkForUpdate(){
   try{
@@ -2410,6 +2410,16 @@ async function loadPlanCard(){
     } else {
       rows.push(`<div style="font-size:13px; color:var(--text-dim);">Live tests: <b style="color:var(--text);">Unlimited</b></div>`);
     }
+    // Running offers from Dhyeodaya for this institute
+    try{
+      const of = await rpc('admin_offers', adminCreds());
+      const PER = { 1: 'Monthly', 3: 'Quarterly', 6: 'Half-yearly', 12: 'Yearly' };
+      ((of && of.ok && of.offers) || []).forEach(o => {
+        const off = o.discount_type === 'percent' ? `${Number(o.discount_value)}% off` : `₹${Number(o.discount_value).toLocaleString('en-IN')} off`;
+        const per = o.periods ? ' on ' + o.periods.map(m => PER[m]).join(' / ') + ' plans' : '';
+        rows.push(`<div style="font-size:13px; font-weight:600; padding:8px 10px; border-radius:8px; background:rgba(22,160,133,.12); border:1px dashed #16a085; color:var(--text);">🎁 ${esc(o.name)}: <span style="color:#16a085;">${esc(off)}${esc(per)}</span> · valid till ${esc(fmtDay(o.valid_to))}. Contact the platform administrator to renew with this offer.</div>`);
+      });
+    }catch(_e){ /* offers are optional */ }
     document.getElementById('plan-rows').innerHTML = rows.join('');
     card.style.display = 'flex';
   }catch(e){ card.style.display = 'none'; }
