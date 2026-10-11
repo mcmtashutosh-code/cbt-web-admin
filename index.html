@@ -1303,7 +1303,7 @@ function esc(s){ return String(s == null ? '' : s).replace(/&/g,'&amp;').replace
 /* ---------------- NEW VERSION CHECK ----------------
    "Refresh" reloads data only. When a new file is uploaded to GitHub, this
    notices it (by APP_VERSION) and offers to load the new version. */
-const APP_VERSION = '2026-10-11.2';
+const APP_VERSION = '2026-10-11.3';
 let updShown = false;
 async function checkForUpdate(){
   try{
@@ -1712,7 +1712,7 @@ async function openTermsSection(){
 }
 
 /* ---------------- INSTITUTE OVERVIEW (show / hide, remembered) ----------------
-   Plan, statistics, live-test card and registration link sit behind one toggle at the top.
+   Plan, statistics, live-test card, registration link and the admin test ID sit behind one toggle at the top.
    Urgent notices (expiring plan, new platform message) always stay visible. */
 (function setupOverviewToggle(){
   const menu = document.getElementById('view-menu'); if (!menu) return;
@@ -1721,7 +1721,7 @@ async function openTermsSection(){
   btn.type = 'button'; btn.className = 'ov-toggle'; btn.id = 'ov-toggle';
   btn.innerHTML = '<span class="ot">📋 Institute overview</span><span class="os" id="ov-summary"></span><span class="oc" id="ov-chev"></span>';
   const body = document.createElement('div'); body.id = 'ov-body';
-  ['dash-stats-strip', 'plan-card', 'quota-card', 'join-link-card'].forEach(id => { const el = document.getElementById(id); if (el) body.appendChild(el); });
+  ['dash-stats-strip', 'plan-card', 'quota-card', 'join-link-card', 'test-id-card'].forEach(id => { const el = document.getElementById(id); if (el) body.appendChild(el); });
   (sub || grid).parentNode.insertBefore(btn, sub ? sub.nextSibling : grid);
   btn.parentNode.insertBefore(body, btn.nextSibling);
   let open = false;
