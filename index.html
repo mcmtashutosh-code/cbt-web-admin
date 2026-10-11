@@ -357,6 +357,14 @@
       </div>
     </div>
 
+    <div class="exam-window-card" id="test-id-card" style="display:none; flex-direction:column; align-items:stretch; gap:10px; margin-bottom:14px;">
+      <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap;">
+        <div class="ew-label" style="font-size:15px;">🧪 Admin test ID</div>
+        <span style="font-size:12px; font-weight:700; padding:3px 10px; border-radius:12px; background:var(--field-2); color:var(--text-dim);">Not counted in student limit</span>
+      </div>
+      <div id="test-id-body" style="display:flex; flex-direction:column; gap:10px;"></div>
+    </div>
+
     <div class="exam-window-card" id="join-link-card" style="flex-direction:column; align-items:stretch; gap:8px; margin-bottom:18px; display:none;">
       <div class="ew-left">
         <div class="ew-label">🔗 Student registration link</div>
@@ -1295,7 +1303,7 @@ function esc(s){ return String(s == null ? '' : s).replace(/&/g,'&amp;').replace
 /* ---------------- NEW VERSION CHECK ----------------
    "Refresh" reloads data only. When a new file is uploaded to GitHub, this
    notices it (by APP_VERSION) and offers to load the new version. */
-const APP_VERSION = '2026-10-11.1';
+const APP_VERSION = '2026-10-11.2';
 let updShown = false;
 async function checkForUpdate(){
   try{
@@ -2407,9 +2415,85 @@ async function loadPlanCard(){
   }catch(e){ card.style.display = 'none'; }
 }
 function addDayIso(d){ if (!d) return d; const t = new Date(d + 'T00:00:00Z'); t.setUTCDate(t.getUTCDate() + 1); return t.toISOString().slice(0, 10); }
+/* ---------------- ADMIN TEST ID ----------------
+   One student login per institute for the admin, to check practice / CSV
+   questions / live exam like a student. Not counted in the student limit;
+   its results never enter results, the result PDF or leaderboards. */
+async function loadTestIdCard(){
+  const card = document.getElementById('test-id-card');
+  const body = document.getElementById('test-id-body');
+  let r;
+  try{ r = await rpc('admin_test_id_get', adminCreds()); }catch(e){ card.style.display = 'none'; return; }
+  if (!r || !r.ok){ card.style.display = 'none'; return; }
+  const note = (t) => `<div style="font-size:12.5px; color:var(--text-dim); line-height:1.5;">${t}</div>`;
+  if (!r.exists){
+    body.innerHTML = note('Create one login for yourself to check your questions, CSV uploads and the live exam exactly as a student sees them. It is <b>not counted</b> in your student limit and its marks <b>never appear</b> in results, the result PDF, merit list or leaderboards. Use a mobile number that no student uses (for example your own).')
+      + `<div style="display:flex; gap:8px; flex-wrap:wrap;">
+           <input id="tid-mobile" inputmode="numeric" maxlength="10" placeholder="Mobile (10 digits)" style="flex:1; min-width:170px;">
+           <input id="tid-pass" type="password" placeholder="Password (min 6)" style="flex:1; min-width:140px;">
+           <button class="btn btn-primary btn-sm" type="button" data-tid="create">➕ Create test ID</button>
+         </div>`;
+  } else {
+    const s = r.session, res = r.result;
+    let status = 'Live exam: <b>not taken yet</b>';
+    if (res){
+      const when = res.submitted_at ? new Date(res.submitted_at).toLocaleString('en-IN', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' }) : '';
+      status = `Last live exam: <b>${esc(res.correct)}/${esc(res.total_q)} correct</b>, ${esc(res.wrong)} wrong · <b>${esc(res.final_marks)} marks</b> · `
+        + `<b style="color:${res.exam_status === 'PASS' ? 'var(--accent-text)' : 'var(--danger)'};">${esc(res.exam_status)}</b> · ${esc(when)}`;
+    } else if (s && s.status){
+      status = `Live exam: <b>${esc(s.status)}</b> · ${esc(s.attempted || 0)} answered`;
+    }
+    body.innerHTML = `<div style="font-size:13.5px;">Login: <b>${esc(r.mobile)}</b> &nbsp;·&nbsp; Name: <b>${esc(r.name)}</b></div>`
+      + note('Sign in on your institute’s student link with this mobile number and its password. The live exam opens for this ID at any time, so you can check the paper before your students.')
+      + `<div style="font-size:13px;">${status}</div>`
+      + `<div style="display:flex; gap:8px; flex-wrap:wrap;">
+           ${(res || (s && s.status)) ? '<button class="btn btn-primary btn-sm" type="button" data-tid="reset">🔁 Take live exam again</button>' : ''}
+           <button class="btn btn-ghost btn-sm" type="button" data-tid="pass">🔑 Change password</button>
+           <button class="btn btn-danger btn-sm" type="button" data-tid="delete">🗑 Delete test ID</button>
+           <button class="btn btn-ghost btn-sm" type="button" data-tid="refresh">↻</button>
+         </div>`;
+  }
+  card.style.display = 'flex';
+}
+document.addEventListener('click', async (e) => {
+  const b = e.target.closest('[data-tid]'); if (!b) return;
+  const act = b.dataset.tid;
+  const run = async (fn, extra, okMsg) => {
+    b.disabled = true;
+    try{
+      const r = await rpc(fn, Object.assign(adminCreds(), extra || {}));
+      if (r && r.ok){ if (okMsg) toast(okMsg, 'ok'); } else toast((r && r.error) || 'Could not complete.', 'err');
+    }catch(err){ toast(err.message || 'Connection error.', 'err'); }
+    b.disabled = false;
+    loadTestIdCard();
+  };
+  if (act === 'refresh') return loadTestIdCard();
+  if (act === 'create'){
+    const m = (document.getElementById('tid-mobile').value || '').trim();
+    const p = document.getElementById('tid-pass').value || '';
+    if (!/^[0-9]{10}$/.test(m)) return toast('Mobile number must be exactly 10 digits.', 'err');
+    if (p.length < 6) return toast('Password must be at least 6 characters.', 'err');
+    return run('admin_test_id_create', { p_mobile: m, p_password: p }, 'Test ID created. Sign in on the student portal with it.');
+  }
+  if (act === 'reset'){
+    if (!confirm('Clear the test ID\'s live exam so it can take the exam again?')) return;
+    return run('admin_test_id_reset_exam', null, 'Done. The test ID can take the live exam again.');
+  }
+  if (act === 'pass'){
+    const p = prompt('New password for the test ID (min 6 characters):');
+    if (p === null) return;
+    if (p.length < 6) return toast('Password must be at least 6 characters.', 'err');
+    return run('admin_test_id_password', { p_new_password: p }, 'Password changed.');
+  }
+  if (act === 'delete'){
+    if (!confirm('Delete the test ID and all its practice, mock and challenge data?')) return;
+    return run('admin_test_id_delete', null, 'Test ID deleted.');
+  }
+});
 async function loadQuotaCard(){
   /* The live-test figures now live inside "My plan" */
   loadPlanCard();
+  loadTestIdCard();
   const card = document.getElementById('quota-card');
   card.style.display = 'none';
   return;
