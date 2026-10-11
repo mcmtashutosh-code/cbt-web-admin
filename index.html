@@ -1291,11 +1291,11 @@ function toast(msg, kind){
   clearTimeout(toast._t);
   toast._t = setTimeout(() => el.classList.remove('show'), 3000);
 }
-function esc(s){ const d=document.createElement('div'); d.textContent = s==null?'':String(s); return d.innerHTML; }
+function esc(s){ return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }   // safe in text AND in quoted attributes
 /* ---------------- NEW VERSION CHECK ----------------
    "Refresh" reloads data only. When a new file is uploaded to GitHub, this
    notices it (by APP_VERSION) and offers to load the new version. */
-const APP_VERSION = '2026-10-10.1';
+const APP_VERSION = '2026-10-11.1';
 let updShown = false;
 async function checkForUpdate(){
   try{
@@ -4038,11 +4038,12 @@ function buildLiveCard(row){
   const flags = [];
   if (row.tab_switch_count) flags.push(`👁 ${row.tab_switch_count} tab switch${row.tab_switch_count===1?'':'es'}`);
   if (row.fullscreen_exit_count) flags.push(`⛶ ${row.fullscreen_exit_count} fullscreen exit${row.fullscreen_exit_count===1?'':'s'}`);
+  if (row.late_submit_seconds) flags.push(`⏰ submitted ${Math.ceil(row.late_submit_seconds/60)} min after time was up`);
 
   card.innerHTML = `
     <div class="live-top">
       <span class="live-name">${esc(row.name || '—')}</span>
-      <span class="live-status-pill ${pillCls}">${pillTxt}</span>
+      <span class="live-status-pill ${pillCls}">${esc(pillTxt)}</span>
     </div>
     <div class="live-meta">ID: ${esc(row.mobile)} · Login: ${esc(row.login_time || '—')} · Logout: ${esc(row.logout_time || '--:--:--')} · Attempted: ${row.attempted || 0}</div>
     ${flags.length ? `<div class="live-flags">${flags.map(f => `<span class="flag-pill">${f}</span>`).join('')}</div>` : ''}
