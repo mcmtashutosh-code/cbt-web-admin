@@ -1303,7 +1303,7 @@ function esc(s){ return String(s == null ? '' : s).replace(/&/g,'&amp;').replace
 /* ---------------- NEW VERSION CHECK ----------------
    "Refresh" reloads data only. When a new file is uploaded to GitHub, this
    notices it (by APP_VERSION) and offers to load the new version. */
-const APP_VERSION = '2026-10-11.4';
+const APP_VERSION = '2026-10-11.5';
 let updShown = false;
 async function checkForUpdate(){
   try{
@@ -1369,7 +1369,18 @@ async function loadAdminBanners(){
     if (!r || !r.ok) return;
     // Dhyeodaya banners for this institute (hidden for today if the admin closed them)
     const today = isoPlus(0);
-    const visible = (r.platform || []).filter(b => { try{ return localStorage.getItem('adm_bnr_hide_' + b.id) !== today; }catch(_e){ return true; } });
+    // Running offers for this institute also scroll in the banner (hidden for today if closed)
+    let offerItems = [];
+    try{
+      const of = await rpc('admin_offers', adminCreds());
+      const PER = { 1: 'Monthly', 3: 'Quarterly', 6: 'Half-yearly', 12: 'Yearly' };
+      offerItems = ((of && of.ok && of.offers) || []).map(o => ({
+        id: 'offer-' + o.name + '-' + o.valid_to,
+        message: `🎁 ${o.name}: ${o.discount_type === 'percent' ? Number(o.discount_value) + '% off' : '₹' + Number(o.discount_value).toLocaleString('en-IN') + ' off'}`
+          + (o.periods ? ' on ' + o.periods.map(m => PER[m]).join(' / ') + ' plans' : ' on renewal')
+          + ` · valid till ${fmtDay(o.valid_to)} · contact Dhyeodaya to renew with this offer` }));
+    }catch(_e){ /* offers are optional */ }
+    const visible = (r.platform || []).concat(offerItems).filter(b => { try{ return localStorage.getItem('adm_bnr_hide_' + b.id) !== today; }catch(_e){ return true; } });
     // keep the banner at the very top of the home screen (above Institute overview)
     const tk = document.getElementById('adm-tkr'), sub0 = document.querySelector('#view-menu .section-sub');
     if (tk && sub0 && tk.previousElementSibling !== sub0) sub0.after(tk);
