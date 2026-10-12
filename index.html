@@ -1314,7 +1314,7 @@ function esc(s){ return String(s == null ? '' : s).replace(/&/g,'&amp;').replace
 /* ---------------- NEW VERSION CHECK ----------------
    "Refresh" reloads data only. When a new file is uploaded to GitHub, this
    notices it (by APP_VERSION) and offers to load the new version. */
-const APP_VERSION = '2026-10-12.1';
+const APP_VERSION = '2026-10-12.3';
 let updShown = false;
 async function checkForUpdate(){
   try{
@@ -5104,7 +5104,7 @@ function renderSectionInputs(currentAllocations){
   }
   wrap.innerHTML = sectionNames.map(sec => {
     const max = esAvailableSections[sec];
-    const current = currentAllocations[sec] != null ? currentAllocations[sec] : max;
+    const current = Math.min(currentAllocations[sec] != null ? currentAllocations[sec] : max, max);   // never more than the questions available
     return `
       <div class="es-sec-row">
         <label>${esc(sec)} (Max ${max})</label>
@@ -5115,6 +5115,11 @@ function renderSectionInputs(currentAllocations){
 
 /* ---- Sectional timing ---- */
 let esTiming = [];   // [{section, minutes}] in order
+function esSecCount(sec){
+  const inp = [...document.querySelectorAll('.es-sec-input')].find(i => i.dataset.section === sec);
+  if (!inp) return 0;
+  return Math.min(parseInt(inp.value, 10) || 0, parseInt(inp.max, 10) || Infinity);
+}
 function esActiveSections(){
   const list = [];
   document.querySelectorAll('.es-sec-input').forEach(inp => { if ((parseInt(inp.value, 10) || 0) > 0) list.push(inp.dataset.section); });
@@ -5139,7 +5144,7 @@ function renderTimingRows(){
     <div class="es-sec-row" style="display:flex; align-items:center; gap:8px;">
       <button type="button" class="btn btn-ghost btn-sm" data-tmove="up" data-i="${i}" ${i === 0 ? 'disabled' : ''} style="padding:4px 9px;">▲</button>
       <button type="button" class="btn btn-ghost btn-sm" data-tmove="down" data-i="${i}" ${i === esTiming.length - 1 ? 'disabled' : ''} style="padding:4px 9px;">▼</button>
-      <label style="flex:1; margin:0;">${i + 1}. ${esc(t.section)}</label>
+      <label style="flex:1; margin:0;">${i + 1}. ${esc(t.section)} <span style="color:var(--accent-text); font-weight:700; white-space:nowrap;">· ${esSecCount(t.section)} Q</span></label>
       <input type="number" min="1" max="600" step="1" class="es-t-min" data-section="${esc(t.section)}" value="${t.minutes || ''}" placeholder="min" style="width:90px;">
     </div>`).join('') : '<div class="upload-hint">Give at least one section some questions first.</div>';
   esTimingTotal();
@@ -5160,7 +5165,16 @@ document.getElementById('es-timing-rows').addEventListener('click', (e) => {
   [esTiming[i], esTiming[j]] = [esTiming[j], esTiming[i]];
   renderTimingRows();
 });
-document.getElementById('es-sections-wrap').addEventListener('change', () => { if (document.getElementById('es-timing-on').checked) renderTimingRows(); });
+document.getElementById('es-sections-wrap').addEventListener('change', (e) => {
+  // a count above the questions available is cut down to the maximum
+  const inp = e.target.closest('.es-sec-input');
+  if (inp){
+    const max = parseInt(inp.max, 10), v = parseInt(inp.value, 10) || 0;
+    if (!isNaN(max) && v > max){ inp.value = max; toast(`${inp.dataset.section} has only ${max} questions — set to ${max}.`, ''); }
+    if (v < 0) inp.value = 0;
+  }
+  if (document.getElementById('es-timing-on').checked) renderTimingRows();
+});
 
 document.getElementById('btn-es-save').addEventListener('click', async () => {
   const errEl = document.getElementById('es-error');
@@ -5187,7 +5201,9 @@ document.getElementById('btn-es-save').addEventListener('click', async () => {
   const sectionAllocations = {};
   let totalQ = 0;
   document.querySelectorAll('.es-sec-input').forEach(inp => {
-    const val = parseInt(inp.value, 10) || 0;
+    const max = parseInt(inp.max, 10);
+    const val = Math.max(0, Math.min(parseInt(inp.value, 10) || 0, isNaN(max) ? Infinity : max));   // never more than available
+    inp.value = val;
     sectionAllocations[inp.dataset.section] = val;
     totalQ += val;
   });
