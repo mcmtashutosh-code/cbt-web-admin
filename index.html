@@ -569,7 +569,8 @@
       <div id="au-rules"></div>
       <label class="field-label">Add a topic</label>
       <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
-        <select id="au-pick" style="flex:1; min-width:220px;"></select>
+        <select id="au-subj" style="flex:1; min-width:160px;"></select>
+        <select id="au-pick" style="flex:2; min-width:200px;"></select>
         <button type="button" class="btn btn-ghost btn-sm" id="btn-au-add">➕ Add</button>
       </div>
       <div class="error-text" id="au-error"></div>
@@ -1336,7 +1337,7 @@ function esc(s){ return String(s == null ? '' : s).replace(/&/g,'&amp;').replace
 /* ---------------- NEW VERSION CHECK ----------------
    "Refresh" reloads data only. When a new file is uploaded to GitHub, this
    notices it (by APP_VERSION) and offers to load the new version. */
-const APP_VERSION = '2026-10-12.5';
+const APP_VERSION = '2026-10-12.6';
 let updShown = false;
 async function checkForUpdate(){
   try{
@@ -3087,12 +3088,22 @@ function renderAutoRules(){
     : '<div class="empty-state" style="padding:12px;">No topics yet. Add a topic below.</div>';
   document.getElementById('au-warn').innerHTML = warn.length
     ? `<div style="border:1px solid var(--danger); background:rgba(231,76,60,.08); border-radius:10px; padding:10px 12px; font-size:12.5px; margin-bottom:10px; line-height:1.6;">⚠️ ${warn.join('<br>⚠️ ')}</div>` : '';
-  const pick = document.getElementById('au-pick');
-  const avail = auBank.filter(b => !auRules.some(x => x.subject === b.subject && x.topic === b.topic));
-  pick.innerHTML = avail.length ? avail.map((b, i) => `<option value="${i}">${esc(b.subject)} · ${esc(b.topic)} (${b.left} left)</option>`).join('')
-    : '<option value="">No more topics in the practice bank</option>';
-  pick.dataset.list = JSON.stringify(avail.map(b => [b.subject, b.topic]));
+  auFillPickers();
 }
+/* Subject box → Topic box (only topics not added yet) */
+function auFillPickers(){
+  const subjSel = document.getElementById('au-subj'), pick = document.getElementById('au-pick');
+  const avail = auBank.filter(b => !auRules.some(x => x.subject === b.subject && x.topic === b.topic));
+  const subjects = [...new Set(avail.map(b => b.subject))];
+  const keep = subjSel.value;
+  subjSel.innerHTML = subjects.length ? subjects.map(sb => `<option>${esc(sb)}</option>`).join('') : '<option value="">No subjects</option>';
+  if (subjects.includes(keep)) subjSel.value = keep;
+  const topics = avail.filter(b => b.subject === subjSel.value);
+  pick.innerHTML = topics.length ? topics.map((b, i) => `<option value="${i}">${esc(b.topic)} (${b.left} left)</option>`).join('')
+    : '<option value="">No more topics</option>';
+  pick.dataset.list = JSON.stringify(topics.map(b => [b.subject, b.topic]));
+}
+document.getElementById('au-subj').addEventListener('change', auFillPickers);
 document.getElementById('au-rules').addEventListener('input', (e) => {
   const inp = e.target.closest('[data-au]'); if (!inp) return;
   auRules[Number(inp.dataset.i)][inp.dataset.au] = parseInt(inp.value, 10) || 0;
