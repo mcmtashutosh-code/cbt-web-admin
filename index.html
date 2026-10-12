@@ -496,6 +496,7 @@
       <div class="tab active" id="ctab-post">Post new</div>
       <div class="tab" id="ctab-manage">Manage today</div>
       <div class="tab" id="ctab-overall">Overall top 10</div>
+      <div class="tab" id="ctab-auto">🤖 Auto daily</div>
     </div>
 
     <!-- POST NEW -->
@@ -554,6 +555,25 @@
       <div id="ch-manage-list"><div class="spin"></div></div>
       <div class="section-title" style="font-size:14px; margin-top:18px;">Students today</div>
       <div id="ch-students-list" style="margin-bottom:22px;"></div>
+    </div>
+
+    <!-- AUTO DAILY -->
+    <div class="ctab-panel" id="cpanel-auto">
+      <div class="upload-hint" style="margin-bottom:10px;">Every day at <b>12:00 midnight</b> a new set is picked at random from your <b>Practice question bank</b> for the topics below, and stays for 24 hours. A question is never given twice. Questions with a DI passage or option images are skipped.</div>
+      <label style="display:flex; align-items:center; gap:8px; cursor:pointer; margin-bottom:12px;">
+        <input type="checkbox" id="au-enabled" style="width:18px; height:18px; cursor:pointer;">
+        <span style="font-weight:600;">Automatic daily challenge is ON</span>
+      </label>
+      <div id="au-status" class="upload-hint" style="margin-bottom:10px;"></div>
+      <div id="au-warn"></div>
+      <div id="au-rules"></div>
+      <label class="field-label">Add a topic</label>
+      <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+        <select id="au-pick" style="flex:1; min-width:220px;"></select>
+        <button type="button" class="btn btn-ghost btn-sm" id="btn-au-add">➕ Add</button>
+      </div>
+      <div class="error-text" id="au-error"></div>
+      <button class="btn btn-primary" id="btn-au-save" style="margin:12px 0 22px;">💾 Save automatic challenge</button>
     </div>
 
     <!-- OVERALL -->
@@ -1316,7 +1336,7 @@ function esc(s){ return String(s == null ? '' : s).replace(/&/g,'&amp;').replace
 /* ---------------- NEW VERSION CHECK ----------------
    "Refresh" reloads data only. When a new file is uploaded to GitHub, this
    notices it (by APP_VERSION) and offers to load the new version. */
-const APP_VERSION = '2026-10-12.4';
+const APP_VERSION = '2026-10-12.5';
 let updShown = false;
 async function checkForUpdate(){
   try{
@@ -3012,6 +3032,9 @@ function setChallengeTab(tab){
   ctabPost.classList.toggle('active', tab === 'post');
   ctabManage.classList.toggle('active', tab === 'manage');
   ctabOverall.classList.toggle('active', tab === 'overall');
+  document.getElementById('ctab-auto').classList.toggle('active', tab === 'auto');
+  document.getElementById('cpanel-auto').classList.toggle('active', tab === 'auto');
+  if (tab === 'auto') loadAutoChallenge();
   cpanelPost.classList.toggle('active', tab === 'post');
   cpanelManage.classList.toggle('active', tab === 'manage');
   cpanelOverall.classList.toggle('active', tab === 'overall');
@@ -3021,6 +3044,88 @@ function setChallengeTab(tab){
 ctabPost.addEventListener('click', () => setChallengeTab('post'));
 ctabManage.addEventListener('click', () => setChallengeTab('manage'));
 ctabOverall.addEventListener('click', () => setChallengeTab('overall'));
+document.getElementById('ctab-auto').addEventListener('click', () => setChallengeTab('auto'));
+
+/* ---------------- AUTOMATIC DAILY CHALLENGE ---------------- */
+let auRules = [], auBank = [];
+async function loadAutoChallenge(){
+  const box = document.getElementById('au-rules');
+  box.innerHTML = '<div class="spin"></div>';
+  document.getElementById('au-error').textContent = '';
+  let r;
+  try{ r = await rpc('admin_challenge_auto_get', adminCreds()); }
+  catch(e){
+    box.innerHTML = `<div class="empty-state">${/404/.test(String(e.message)) ? 'Automatic challenge is not set up in the database yet (run z_auto_challenge.sql).' : 'Unable to load. Please try again.'}</div>`;
+    return;
+  }
+  if (!r || !r.ok){ box.innerHTML = `<div class="empty-state">${esc((r && r.error) || 'Unable to load.')}</div>`; return; }
+  auBank = r.bank || [];
+  auRules = (r.rules || []).map(x => ({ subject: x.subject, topic: x.topic, per_day: x.per_day, seconds: x.seconds }));
+  document.getElementById('au-enabled').checked = !!r.enabled;
+  document.getElementById('au-status').innerHTML = r.enabled
+    ? `✅ Running. Today's automatic set: <b>${r.today_count}</b> question${r.today_count === 1 ? '' : 's'} · ${r.used_total} given so far. Changes to topics apply from the next day's set.`
+    : 'Off. Turn it on and save to start.';
+  renderAutoRules();
+}
+function auLeft(sub, top){ const b = auBank.find(x => x.subject === sub && x.topic === top); return b ? b : { usable: 0, left: 0 }; }
+function renderAutoRules(){
+  const box = document.getElementById('au-rules');
+  const warn = [];
+  box.innerHTML = auRules.length ? `<table class="es-tbl"><thead><tr><th>Subject · Topic</th><th class="r">Left</th><th class="r">Per day</th><th class="r">Seconds</th><th></th></tr></thead><tbody>${
+    auRules.map((x, i) => {
+      const b = auLeft(x.subject, x.topic);
+      const days = x.per_day ? Math.floor(b.left / x.per_day) : 0;
+      const col = b.left === 0 ? 'var(--danger)' : (days < 7 ? '#f39c12' : 'var(--text)');
+      if (b.left === 0) warn.push(`<b>${esc(x.subject)} · ${esc(x.topic)}</b>: no unused questions left — this topic has stopped. Add new practice questions for it.`);
+      else if (days < 7) warn.push(`<b>${esc(x.subject)} · ${esc(x.topic)}</b>: only ${b.left} question${b.left === 1 ? '' : 's'} left (about ${Math.max(1, days)} day${days > 1 ? 's' : ''}).`);
+      return `<tr><td>${esc(x.subject)} · <b>${esc(x.topic)}</b></td>
+        <td class="r" style="color:${col}; font-weight:700;" title="${b.usable} usable in total">${b.left}</td>
+        <td class="r"><input type="number" min="1" max="20" value="${x.per_day}" data-au="per_day" data-i="${i}"></td>
+        <td class="r"><input type="number" min="5" max="600" value="${x.seconds}" data-au="seconds" data-i="${i}"></td>
+        <td class="r"><button type="button" class="btn btn-ghost btn-sm" data-au-del="${i}" title="Remove">✕</button></td></tr>`;
+    }).join('')}</tbody><tfoot><tr><td>Total per day</td><td></td><td class="r" id="au-total">${auRules.reduce((a, x) => a + (Number(x.per_day) || 0), 0)}</td><td></td><td></td></tr></tfoot></table>`
+    : '<div class="empty-state" style="padding:12px;">No topics yet. Add a topic below.</div>';
+  document.getElementById('au-warn').innerHTML = warn.length
+    ? `<div style="border:1px solid var(--danger); background:rgba(231,76,60,.08); border-radius:10px; padding:10px 12px; font-size:12.5px; margin-bottom:10px; line-height:1.6;">⚠️ ${warn.join('<br>⚠️ ')}</div>` : '';
+  const pick = document.getElementById('au-pick');
+  const avail = auBank.filter(b => !auRules.some(x => x.subject === b.subject && x.topic === b.topic));
+  pick.innerHTML = avail.length ? avail.map((b, i) => `<option value="${i}">${esc(b.subject)} · ${esc(b.topic)} (${b.left} left)</option>`).join('')
+    : '<option value="">No more topics in the practice bank</option>';
+  pick.dataset.list = JSON.stringify(avail.map(b => [b.subject, b.topic]));
+}
+document.getElementById('au-rules').addEventListener('input', (e) => {
+  const inp = e.target.closest('[data-au]'); if (!inp) return;
+  auRules[Number(inp.dataset.i)][inp.dataset.au] = parseInt(inp.value, 10) || 0;
+  const t = document.getElementById('au-total');   // update the total without redrawing (keeps the cursor in place)
+  if (t) t.textContent = auRules.reduce((a, x) => a + (Number(x.per_day) || 0), 0);
+});
+document.getElementById('au-rules').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-au-del]'); if (!b) return;
+  auRules.splice(Number(b.dataset.auDel), 1); renderAutoRules();
+});
+document.getElementById('btn-au-add').addEventListener('click', () => {
+  const pick = document.getElementById('au-pick');
+  const list = JSON.parse(pick.dataset.list || '[]'); const v = list[Number(pick.value)];
+  if (!v) return;
+  auRules.push({ subject: v[0], topic: v[1], per_day: 1, seconds: 30 });
+  renderAutoRules();
+});
+document.getElementById('btn-au-save').addEventListener('click', async () => {
+  const errEl = document.getElementById('au-error'); errEl.textContent = '';
+  const enabled = document.getElementById('au-enabled').checked;
+  const bad = auRules.filter(x => !(x.per_day >= 1 && x.per_day <= 20) || !(x.seconds >= 5 && x.seconds <= 600));
+  if (bad.length){ errEl.textContent = 'Per day must be 1–20 and seconds 5–600 for: ' + bad.map(x => x.topic).join(', '); return; }
+  if (enabled && !auRules.length){ errEl.textContent = 'Add at least one topic.'; return; }
+  const btn = document.getElementById('btn-au-save'); btn.disabled = true;
+  try{
+    const r = await rpc('admin_challenge_auto_save', { ...adminCreds(), p_enabled: enabled, p_rules: auRules });
+    if (r && r.ok){
+      toast(enabled ? (r.added_today ? `Saved. ${r.added_today} question(s) added to today's challenge.` : 'Saved. The new set comes at 12:00 midnight.') : 'Automatic challenge is off.', 'ok');
+      loadAutoChallenge();
+    } else errEl.textContent = (r && r.error) || 'Unable to save.';
+  }catch(e){ errEl.textContent = 'Connection error. Please try again.'; }
+  finally{ btn.disabled = false; }
+});
 
 /* correct-answer and expiry chip selectors */
 let chCorrectIndex = 0;
