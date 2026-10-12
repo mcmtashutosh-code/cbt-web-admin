@@ -248,6 +248,14 @@
   .upload-hint code{background:var(--field-2); color:var(--accent-text); padding:1px 5px; border-radius:4px; font-size:11px;}
   .es-sec-row{display:flex; align-items:center; justify-content:space-between; gap:10px; padding:8px 0; border-bottom:1px solid var(--line-soft);}
   .es-sec-row:last-child{border-bottom:none;}
+  .es-tbl{width:100%; border-collapse:collapse; font-size:13px;}
+  .es-tbl th{font-size:10.5px; text-transform:uppercase; letter-spacing:.04em; color:var(--text-mute); text-align:left; padding:6px 6px; border-bottom:1px solid var(--line-soft); white-space:nowrap;}
+  .es-tbl td{padding:6px 6px; border-bottom:1px solid var(--line-soft); color:var(--text);}
+  .es-tbl .r{text-align:right;}
+  .es-tbl input{width:78px; padding:6px 8px; text-align:right;}
+  .es-tbl tfoot td{border-bottom:0; font-weight:800; color:var(--accent-text);}
+  .es-tbl tr.off td{opacity:.5;}
+  .es-tbl .mv{padding:3px 8px; margin-right:3px;}
   .es-sec-row label{font-size:12.5px; color:var(--text-dim); flex:1;}
   .es-sec-row input{width:80px; padding:8px 10px; font-size:13px;}
 
@@ -1249,19 +1257,13 @@
       <option value="HIDDEN (Mask Detailed Score)">HIDDEN (Mask Detailed Score)</option>
     </select>
 
-    <label class="field-label">⭐ Section-wise question count</label>
-    <div id="es-sections-wrap" class="upload-hint">Loading sections...</div>
-
-    <label class="field-label">⏳ Sectional timing (optional)</label>
+    <label class="field-label">⭐ Sections: questions and time</label>
     <label style="display:flex; align-items:center; gap:8px; cursor:pointer; margin-bottom:8px;">
       <input type="checkbox" id="es-timing-on" style="width:18px; height:18px; cursor:pointer;">
-      <span>Give each section its own time (e.g. Maths 20 min → English 30 min)</span>
+      <span>⏳ Sectional timing: give each section its own time (optional)</span>
     </label>
-    <div id="es-timing-box" style="display:none;">
-      <div class="upload-hint" style="margin-bottom:8px;">Sections come in this order (use ▲ ▼). When a section's time ends, the student moves to the next section automatically and cannot go back. A student cannot move to the next section early. Exam duration = total of all sections.</div>
-      <div id="es-timing-rows"></div>
-      <div style="font-size:13px; font-weight:600; margin:6px 0 12px;">Total: <span id="es-timing-total">0</span> minutes</div>
-    </div>
+    <div id="es-sections-wrap" class="upload-hint">Loading sections...</div>
+    <div id="es-timing-box" class="upload-hint" style="display:none; margin-top:8px;">Sections come in the order shown (use ▲ ▼). When a section's time ends, the student moves to the next section automatically and cannot go back; a student cannot move to the next section early. Exam duration = total minutes. A section with 0 questions is left out.</div>
 
     <label class="field-label">7 · Email result to student (Coming soon)</label>
     <div class="upload-hint" style="margin-bottom:8px;">
@@ -1314,7 +1316,7 @@ function esc(s){ return String(s == null ? '' : s).replace(/&/g,'&amp;').replace
 /* ---------------- NEW VERSION CHECK ----------------
    "Refresh" reloads data only. When a new file is uploaded to GitHub, this
    notices it (by APP_VERSION) and offers to load the new version. */
-const APP_VERSION = '2026-10-12.3';
+const APP_VERSION = '2026-10-12.4';
 let updShown = false;
 async function checkForUpdate(){
   try{
@@ -5086,94 +5088,77 @@ async function openExamSettingsSection(){
 
     esAvailableSections = r.available_sections || {};
     const currentAllocations = r.section_allocations || {};
-    renderSectionInputs(currentAllocations);
-    esTiming = Array.isArray(r.section_timing) ? r.section_timing.map(t => ({ section: t.section, minutes: Number(t.minutes) })) : [];
-    document.getElementById('es-timing-on').checked = esTiming.length > 0;
-    renderTimingRows();
+    const timing = Array.isArray(r.section_timing) ? r.section_timing.map(t => ({ section: t.section, minutes: Number(t.minutes) })) : [];
+    document.getElementById('es-timing-on').checked = timing.length > 0;
+    renderSectionInputs(currentAllocations, timing);
   }catch(err){
     document.getElementById('es-error').textContent = 'Connection error. Please try again.';
   }
 }
 
-function renderSectionInputs(currentAllocations){
-  const wrap = document.getElementById('es-sections-wrap');
-  const sectionNames = Object.keys(esAvailableSections);
-  if (!sectionNames.length){
-    wrap.innerHTML = '<div style="padding:4px 0;">No sections detected. Upload exam questions first.</div>';
-    return;
-  }
-  wrap.innerHTML = sectionNames.map(sec => {
+/* ---- One table: section · available · questions · (order + minutes when sectional timing is on) ---- */
+let esRows = [];     // [{section, max, q, minutes}] in display order
+let esTiming = [];   // [{section, minutes}] in order, sections with questions only (used when saving)
+function renderSectionInputs(currentAllocations, timing){
+  const names = Object.keys(esAvailableSections);
+  const tOrder = (timing || []).map(t => t.section);
+  const ordered = tOrder.filter(n => names.includes(n)).concat(names.filter(n => !tOrder.includes(n)));
+  esRows = ordered.map(sec => {
     const max = esAvailableSections[sec];
-    const current = Math.min(currentAllocations[sec] != null ? currentAllocations[sec] : max, max);   // never more than the questions available
-    return `
-      <div class="es-sec-row">
-        <label>${esc(sec)} (Max ${max})</label>
-        <input type="number" min="0" max="${max}" value="${current}" data-section="${esc(sec)}" class="es-sec-input">
-      </div>`;
-  }).join('');
-}
-
-/* ---- Sectional timing ---- */
-let esTiming = [];   // [{section, minutes}] in order
-function esSecCount(sec){
-  const inp = [...document.querySelectorAll('.es-sec-input')].find(i => i.dataset.section === sec);
-  if (!inp) return 0;
-  return Math.min(parseInt(inp.value, 10) || 0, parseInt(inp.max, 10) || Infinity);
-}
-function esActiveSections(){
-  const list = [];
-  document.querySelectorAll('.es-sec-input').forEach(inp => { if ((parseInt(inp.value, 10) || 0) > 0) list.push(inp.dataset.section); });
-  return list;
-}
-function esReadTimingRows(){
-  document.querySelectorAll('#es-timing-rows .es-t-min').forEach(inp => {
-    const t = esTiming.find(x => x.section === inp.dataset.section); if (t) t.minutes = parseFloat(inp.value) || 0;
+    const t = (timing || []).find(x => x.section === sec);
+    return { section: sec, max, q: Math.min(currentAllocations[sec] != null ? currentAllocations[sec] : max, max), minutes: t ? Number(t.minutes) : 0 };
   });
+  renderSecTable();
 }
-function renderTimingRows(){
+function esReadTable(){
+  document.querySelectorAll('#es-sections-wrap .es-sec-input').forEach(inp => {
+    const r = esRows.find(x => x.section === inp.dataset.section); if (!r) return;
+    let v = parseInt(inp.value, 10) || 0;
+    if (v > r.max){ v = r.max; inp.value = v; toast(`${r.section} has only ${r.max} questions — set to ${r.max}.`, ''); }
+    if (v < 0){ v = 0; inp.value = 0; }
+    r.q = v;
+  });
+  document.querySelectorAll('#es-sections-wrap .es-t-min').forEach(inp => {
+    const r = esRows.find(x => x.section === inp.dataset.section); if (r) r.minutes = parseFloat(inp.value) || 0;
+  });
+  esTiming = esRows.filter(r => r.q > 0).map(r => ({ section: r.section, minutes: r.minutes }));
+}
+function renderSecTable(){
+  const wrap = document.getElementById('es-sections-wrap');
   const on = document.getElementById('es-timing-on').checked;
   document.getElementById('es-timing-box').style.display = on ? 'block' : 'none';
   document.getElementById('es-duration').disabled = on;
-  if (!on) return;
-  esReadTimingRows();
-  const active = esActiveSections();
-  esTiming = esTiming.filter(t => active.includes(t.section));               // keep saved order
-  active.forEach(sec => { if (!esTiming.some(t => t.section === sec)) esTiming.push({ section: sec, minutes: 0 }); });
-  const wrap = document.getElementById('es-timing-rows');
-  wrap.innerHTML = esTiming.length ? esTiming.map((t, i) => `
-    <div class="es-sec-row" style="display:flex; align-items:center; gap:8px;">
-      <button type="button" class="btn btn-ghost btn-sm" data-tmove="up" data-i="${i}" ${i === 0 ? 'disabled' : ''} style="padding:4px 9px;">▲</button>
-      <button type="button" class="btn btn-ghost btn-sm" data-tmove="down" data-i="${i}" ${i === esTiming.length - 1 ? 'disabled' : ''} style="padding:4px 9px;">▼</button>
-      <label style="flex:1; margin:0;">${i + 1}. ${esc(t.section)} <span style="color:var(--accent-text); font-weight:700; white-space:nowrap;">· ${esSecCount(t.section)} Q</span></label>
-      <input type="number" min="1" max="600" step="1" class="es-t-min" data-section="${esc(t.section)}" value="${t.minutes || ''}" placeholder="min" style="width:90px;">
-    </div>`).join('') : '<div class="upload-hint">Give at least one section some questions first.</div>';
-  esTimingTotal();
+  if (!esRows.length){ wrap.innerHTML = '<div style="padding:4px 0;">No sections detected. Upload exam questions first.</div>'; return; }
+  wrap.innerHTML = `<table class="es-tbl"><thead><tr>${on ? '<th>Order</th>' : ''}<th>Section</th><th class="r">Available</th><th class="r">Questions</th>${on ? '<th class="r">Minutes</th>' : ''}</tr></thead><tbody>${
+    esRows.map((r, i) => `<tr class="${on && !r.q ? 'off' : ''}">
+      ${on ? `<td style="white-space:nowrap;"><button type="button" class="btn btn-ghost btn-sm mv" data-tmove="up" data-i="${i}" ${i === 0 ? 'disabled' : ''}>▲</button><button type="button" class="btn btn-ghost btn-sm mv" data-tmove="down" data-i="${i}" ${i === esRows.length - 1 ? 'disabled' : ''}>▼</button></td>` : ''}
+      <td>${esc(r.section)}</td><td class="r">${r.max}</td>
+      <td class="r"><input type="number" min="0" max="${r.max}" value="${r.q}" data-section="${esc(r.section)}" class="es-sec-input"></td>
+      ${on ? `<td class="r"><input type="number" min="1" max="600" step="1" class="es-t-min" data-section="${esc(r.section)}" value="${r.minutes || ''}" placeholder="min" ${r.q ? '' : 'disabled'}></td>` : ''}</tr>`).join('')
+  }</tbody><tfoot><tr>${on ? '<td></td>' : ''}<td>Total</td><td></td><td class="r" id="es-tot-q"></td>${on ? '<td class="r" id="es-tot-min"></td>' : ''}</tr></tfoot></table>`;
+  esTotals();
 }
-function esTimingTotal(){
-  esReadTimingRows();
-  const total = esTiming.reduce((a, t) => a + (Number(t.minutes) || 0), 0);
-  document.getElementById('es-timing-total').textContent = total;
-  if (document.getElementById('es-timing-on').checked) document.getElementById('es-duration').value = total || '';
+function esTotals(){
+  esReadTable();
+  const q = esRows.reduce((a, r) => a + r.q, 0);
+  const m = esTiming.reduce((a, t) => a + (Number(t.minutes) || 0), 0);
+  const tq = document.getElementById('es-tot-q'); if (tq) tq.textContent = q + ' Q';
+  const tm = document.getElementById('es-tot-min'); if (tm) tm.textContent = m + ' min';
+  if (document.getElementById('es-timing-on').checked) document.getElementById('es-duration').value = m || '';
 }
+function renderTimingRows(){ esReadTable(); renderSecTable(); }   // kept for the save step
 document.getElementById('es-timing-on').addEventListener('change', renderTimingRows);
-document.getElementById('es-timing-rows').addEventListener('input', esTimingTotal);
-document.getElementById('es-timing-rows').addEventListener('click', (e) => {
-  const b = e.target.closest('[data-tmove]'); if (!b) return;
-  esReadTimingRows();
-  const i = Number(b.dataset.i), j = b.dataset.tmove === 'up' ? i - 1 : i + 1;
-  if (j < 0 || j >= esTiming.length) return;
-  [esTiming[i], esTiming[j]] = [esTiming[j], esTiming[i]];
-  renderTimingRows();
-});
+document.getElementById('es-sections-wrap').addEventListener('input', esTotals);
 document.getElementById('es-sections-wrap').addEventListener('change', (e) => {
-  // a count above the questions available is cut down to the maximum
-  const inp = e.target.closest('.es-sec-input');
-  if (inp){
-    const max = parseInt(inp.max, 10), v = parseInt(inp.value, 10) || 0;
-    if (!isNaN(max) && v > max){ inp.value = max; toast(`${inp.dataset.section} has only ${max} questions — set to ${max}.`, ''); }
-    if (v < 0) inp.value = 0;
-  }
-  if (document.getElementById('es-timing-on').checked) renderTimingRows();
+  if (e.target.closest('.es-sec-input')) renderTimingRows();   // 0 questions → its minutes box is switched off
+});
+document.getElementById('es-sections-wrap').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-tmove]'); if (!b) return;
+  esReadTable();
+  const i = Number(b.dataset.i), j = b.dataset.tmove === 'up' ? i - 1 : i + 1;
+  if (j < 0 || j >= esRows.length) return;
+  [esRows[i], esRows[j]] = [esRows[j], esRows[i]];
+  renderSecTable();
 });
 
 document.getElementById('btn-es-save').addEventListener('click', async () => {
