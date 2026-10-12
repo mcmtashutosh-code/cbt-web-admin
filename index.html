@@ -1252,6 +1252,17 @@
     <label class="field-label">⭐ Section-wise question count</label>
     <div id="es-sections-wrap" class="upload-hint">Loading sections...</div>
 
+    <label class="field-label">⏳ Sectional timing (optional)</label>
+    <label style="display:flex; align-items:center; gap:8px; cursor:pointer; margin-bottom:8px;">
+      <input type="checkbox" id="es-timing-on" style="width:18px; height:18px; cursor:pointer;">
+      <span>Give each section its own time (e.g. Maths 20 min → English 30 min)</span>
+    </label>
+    <div id="es-timing-box" style="display:none;">
+      <div class="upload-hint" style="margin-bottom:8px;">Sections come in this order (use ▲ ▼). When a section's time ends, the student moves to the next section automatically and cannot go back. A student cannot move to the next section early. Exam duration = total of all sections.</div>
+      <div id="es-timing-rows"></div>
+      <div style="font-size:13px; font-weight:600; margin:6px 0 12px;">Total: <span id="es-timing-total">0</span> minutes</div>
+    </div>
+
     <label class="field-label">7 · Email result to student (Coming soon)</label>
     <div class="upload-hint" style="margin-bottom:8px;">
       When enabled, students will see an option to email themselves their result + answer key right after submitting.
@@ -1303,7 +1314,7 @@ function esc(s){ return String(s == null ? '' : s).replace(/&/g,'&amp;').replace
 /* ---------------- NEW VERSION CHECK ----------------
    "Refresh" reloads data only. When a new file is uploaded to GitHub, this
    notices it (by APP_VERSION) and offers to load the new version. */
-const APP_VERSION = '2026-10-11.5';
+const APP_VERSION = '2026-10-12.1';
 let updShown = false;
 async function checkForUpdate(){
   try{
@@ -5076,6 +5087,9 @@ async function openExamSettingsSection(){
     esAvailableSections = r.available_sections || {};
     const currentAllocations = r.section_allocations || {};
     renderSectionInputs(currentAllocations);
+    esTiming = Array.isArray(r.section_timing) ? r.section_timing.map(t => ({ section: t.section, minutes: Number(t.minutes) })) : [];
+    document.getElementById('es-timing-on').checked = esTiming.length > 0;
+    renderTimingRows();
   }catch(err){
     document.getElementById('es-error').textContent = 'Connection error. Please try again.';
   }
@@ -5099,10 +5113,66 @@ function renderSectionInputs(currentAllocations){
   }).join('');
 }
 
+/* ---- Sectional timing ---- */
+let esTiming = [];   // [{section, minutes}] in order
+function esActiveSections(){
+  const list = [];
+  document.querySelectorAll('.es-sec-input').forEach(inp => { if ((parseInt(inp.value, 10) || 0) > 0) list.push(inp.dataset.section); });
+  return list;
+}
+function esReadTimingRows(){
+  document.querySelectorAll('#es-timing-rows .es-t-min').forEach(inp => {
+    const t = esTiming.find(x => x.section === inp.dataset.section); if (t) t.minutes = parseFloat(inp.value) || 0;
+  });
+}
+function renderTimingRows(){
+  const on = document.getElementById('es-timing-on').checked;
+  document.getElementById('es-timing-box').style.display = on ? 'block' : 'none';
+  document.getElementById('es-duration').disabled = on;
+  if (!on) return;
+  esReadTimingRows();
+  const active = esActiveSections();
+  esTiming = esTiming.filter(t => active.includes(t.section));               // keep saved order
+  active.forEach(sec => { if (!esTiming.some(t => t.section === sec)) esTiming.push({ section: sec, minutes: 0 }); });
+  const wrap = document.getElementById('es-timing-rows');
+  wrap.innerHTML = esTiming.length ? esTiming.map((t, i) => `
+    <div class="es-sec-row" style="display:flex; align-items:center; gap:8px;">
+      <button type="button" class="btn btn-ghost btn-sm" data-tmove="up" data-i="${i}" ${i === 0 ? 'disabled' : ''} style="padding:4px 9px;">▲</button>
+      <button type="button" class="btn btn-ghost btn-sm" data-tmove="down" data-i="${i}" ${i === esTiming.length - 1 ? 'disabled' : ''} style="padding:4px 9px;">▼</button>
+      <label style="flex:1; margin:0;">${i + 1}. ${esc(t.section)}</label>
+      <input type="number" min="1" max="600" step="1" class="es-t-min" data-section="${esc(t.section)}" value="${t.minutes || ''}" placeholder="min" style="width:90px;">
+    </div>`).join('') : '<div class="upload-hint">Give at least one section some questions first.</div>';
+  esTimingTotal();
+}
+function esTimingTotal(){
+  esReadTimingRows();
+  const total = esTiming.reduce((a, t) => a + (Number(t.minutes) || 0), 0);
+  document.getElementById('es-timing-total').textContent = total;
+  if (document.getElementById('es-timing-on').checked) document.getElementById('es-duration').value = total || '';
+}
+document.getElementById('es-timing-on').addEventListener('change', renderTimingRows);
+document.getElementById('es-timing-rows').addEventListener('input', esTimingTotal);
+document.getElementById('es-timing-rows').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-tmove]'); if (!b) return;
+  esReadTimingRows();
+  const i = Number(b.dataset.i), j = b.dataset.tmove === 'up' ? i - 1 : i + 1;
+  if (j < 0 || j >= esTiming.length) return;
+  [esTiming[i], esTiming[j]] = [esTiming[j], esTiming[i]];
+  renderTimingRows();
+});
+document.getElementById('es-sections-wrap').addEventListener('change', () => { if (document.getElementById('es-timing-on').checked) renderTimingRows(); });
+
 document.getElementById('btn-es-save').addEventListener('click', async () => {
   const errEl = document.getElementById('es-error');
   errEl.textContent = '';
 
+  const timingOn = document.getElementById('es-timing-on').checked;
+  if (timingOn){
+    renderTimingRows();
+    if (!esTiming.length){ errEl.textContent = 'Sectional timing needs at least one section with questions.'; return; }
+    const bad = esTiming.filter(t => !(t.minutes >= 1 && t.minutes <= 600));
+    if (bad.length){ errEl.textContent = `Please give 1 to 600 minutes to: ${bad.map(t => t.section).join(', ')}`; return; }
+  }
   const duration = parseFloat(document.getElementById('es-duration').value);
   const marksCorrect = parseFloat(document.getElementById('es-marks-correct').value);
   const marksWrong = Math.abs(parseFloat(document.getElementById('es-marks-wrong').value) || 0);
@@ -5128,6 +5198,7 @@ document.getElementById('btn-es-save').addEventListener('click', async () => {
   const confirmMsg =
     `Please verify before syncing to Cloud:\n\n` +
     `⏱ Exam Duration   : ${duration} minutes\n` +
+    (timingOn ? `⏳ Sectional timing: ${esTiming.map(t => `${t.section} ${t.minutes} min`).join(' → ')}\n` : '') +
     `🎯 Passing Criteria: ${passingValue} (${passingType})\n` +
     `📝 Total Questions : ${totalQ}\n` +
     `📚 Section-wise Breakup:\n${secLines}\n\n` +
@@ -5148,8 +5219,18 @@ document.getElementById('btn-es-save').addEventListener('click', async () => {
       p_result_visibility: visibility, p_section_allocations: sectionAllocations,
       p_email_result_enabled: document.getElementById('es-email-enabled').checked
     });
-    if (ok) toast('Exam settings synced to cloud successfully.', 'ok');
-    else errEl.textContent = 'Unable to save settings.';
+    if (!ok){ errEl.textContent = 'Unable to save settings.'; return; }
+    let tr = null;
+    try{
+      tr = await rpc('admin_set_section_timing', { p_admin_id: admin.adminId, p_admin_pass: admin.adminPass,
+        p_timing: timingOn ? esTiming.map(t => ({ section: t.section, minutes: t.minutes })) : [] });
+    }catch(e2){
+      if (timingOn) errEl.textContent = 'Settings saved, but sectional timing is not set up in the database yet (run x_sectional_timing.sql).';
+      else toast('Exam settings synced to cloud successfully.', 'ok');
+      return;
+    }
+    if (tr && tr.ok) toast(timingOn ? `Exam settings + sectional timing saved (total ${tr.total_minutes} min).` : 'Exam settings synced to cloud successfully.', 'ok');
+    else errEl.textContent = 'Settings saved, but sectional timing was not: ' + ((tr && tr.error) || 'unknown error');
   }catch(err){
     errEl.textContent = 'Connection error. Please try again.';
   }finally{
