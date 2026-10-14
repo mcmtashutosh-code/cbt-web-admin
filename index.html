@@ -528,6 +528,9 @@
         <div class="filter-chip" data-c="3">D</div>
       </div>
 
+      <label class="field-label">Solution (optional — students see it after the challenge closes)</label>
+      <textarea id="ch-solution" rows="3" placeholder="Explain the answer… (leave empty if none)"></textarea>
+
       <label class="field-label">Time limit (seconds, min 30)</label>
       <input id="ch-time-limit" type="number" min="30" value="120">
 
@@ -1337,7 +1340,7 @@ function esc(s){ return String(s == null ? '' : s).replace(/&/g,'&amp;').replace
 /* ---------------- NEW VERSION CHECK ----------------
    "Refresh" reloads data only. When a new file is uploaded to GitHub, this
    notices it (by APP_VERSION) and offers to load the new version. */
-const APP_VERSION = '2026-10-12.6';
+const APP_VERSION = '2026-10-14.1';
 let updShown = false;
 async function checkForUpdate(){
   try{
@@ -3226,11 +3229,12 @@ document.getElementById('btn-post-challenge').addEventListener('click', async ()
       p_admin_id: admin.adminId, p_admin_pass: admin.adminPass,
       p_question: question, p_option1: a, p_option2: b, p_option3: c, p_option4: d,
       p_correct_index: chCorrectIndex, p_topic: topic, p_subject: subject,
-      p_time_limit_seconds: timeLimit, p_expiry_hours: chExpiryHours, p_image_url: imageUrl
+      p_time_limit_seconds: timeLimit, p_expiry_hours: chExpiryHours, p_image_url: imageUrl,
+      p_solution: document.getElementById('ch-solution').value.trim() || null
     });
     if (ok){
       toast('Challenge posted successfully.', 'ok');
-      ['ch-question','ch-opt-a','ch-opt-b','ch-opt-c','ch-opt-d','ch-topic','ch-subject'].forEach(id => document.getElementById(id).value = '');
+      ['ch-question','ch-opt-a','ch-opt-b','ch-opt-c','ch-opt-d','ch-topic','ch-subject','ch-solution'].forEach(id => document.getElementById(id).value = '');
       document.getElementById('ch-time-limit').value = 120;
       chImageFile = null; chImageInput.value = '';
       chImagePreviewWrap.style.display = 'none'; chImagePreview.src = '';
