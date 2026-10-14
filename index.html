@@ -596,6 +596,7 @@
       <div class="tab active" id="rtab-exam">Exam results</div>
       <div class="tab" id="rtab-practice">Practice sessions</div>
       <div class="tab" id="rtab-mock">Mock tests</div>
+      <div class="tab" id="rtab-pyq">📜 PYQ</div>
     </div>
 
     <!-- EXAM RESULTS -->
@@ -613,6 +614,17 @@
       <div class="stat-bar" id="prac-stat-bar"></div>
       <button class="btn btn-danger btn-sm" id="btn-clear-practice" style="margin-bottom:12px;">🗑 Clear all practice records</button>
       <div id="practice-sessions-list"><div class="spin"></div></div>
+    </div>
+
+    <!-- PYQ -->
+    <div class="ctab-panel" id="rpanel-pyq">
+      <div class="stat-bar" id="pyq-stat-bar"></div>
+      <div id="pyq-res-main"><div class="spin"></div></div>
+      <div id="pyq-res-detail" style="display:none;">
+        <button class="btn btn-ghost btn-sm" id="btn-pyq-detail-back" style="margin-bottom:12px;">← Back to all students</button>
+        <div id="pyq-res-title" style="font-weight:700; margin-bottom:10px;"></div>
+        <div id="pyq-res-attempts"></div>
+      </div>
     </div>
 
     <!-- MOCK TESTS -->
@@ -875,6 +887,7 @@
       <div class="sr-tabs" id="lb-tabs">
         <button class="sr-tab on" data-lb="live" type="button">Live tests</button>
         <button class="sr-tab" data-lb="mock" type="button">Mock tests</button>
+        <button class="sr-tab" data-lb="pyq" type="button">PYQ</button>
         <button class="sr-tab" data-lb="practice" type="button">Practice</button>
         <button class="sr-tab" data-lb="challenge" type="button">Daily challenge</button>
       </div>
@@ -1357,7 +1370,7 @@ function esc(s){ return String(s == null ? '' : s).replace(/&/g,'&amp;').replace
 /* ---------------- NEW VERSION CHECK ----------------
    "Refresh" reloads data only. When a new file is uploaded to GitHub, this
    notices it (by APP_VERSION) and offers to load the new version. */
-const APP_VERSION = '2026-10-14.2';
+const APP_VERSION = '2026-10-14.3';
 let updShown = false;
 async function checkForUpdate(){
   try{
@@ -1543,6 +1556,7 @@ function srRenderLeaderboard(){
   document.querySelectorAll('#lb-tabs .sr-tab').forEach(b => b.classList.toggle('on', b.dataset.lb === lbTab));
   const note = { live: `Ranked by average score across all live exams (at least ${rules.live_min || 1} exam).`,
                  mock: `Ranked by average score across mock tests (at least ${rules.mock_min || 2} mock tests).`,
+                 pyq: `Ranked by average score across previous year papers (at least ${rules.pyq_min || 2} papers).`,
                  practice: `Ranked by practice accuracy (at least ${rules.practice_min || 50} questions attempted).`,
                  challenge: 'Ranked by total daily-challenge points (same as the overall leaderboard students see).' }[lbTab];
   document.getElementById('lb-note').textContent = note;
@@ -1550,6 +1564,7 @@ function srRenderLeaderboard(){
   const medal = i => ['🥇', '🥈', '🥉'][i] || (i + 1);
   const extra = x => lbTab === 'live' ? `${x.count} exam${x.count == 1 ? '' : 's'} · avg ${x.avg_marks} marks`
                    : lbTab === 'mock' ? `${x.count} mock tests · ${x.questions} questions`
+                   : lbTab === 'pyq' ? `${x.count} papers · ${x.questions} questions`
                    : lbTab === 'challenge' ? `${x.count} challenges · avg ${x.score ?? '—'} per challenge`
                    : `${x.correct}/${x.attempted} correct`;
   el.innerHTML = rows.map((x, i) => `<div class="lb-row" data-m="${esc(x.mobile)}">
@@ -1593,7 +1608,7 @@ function srTable(head, rows){
   return `<div style="overflow-x:auto;"><table class="sr-table"><tr>${head.map(h => `<th>${h}</th>`).join('')}</tr>${rows.join('')}</table></div>`;
 }
 function srRenderProfile(){
-  const r = srProfile, s = r.student, L = r.live || {}, M = r.mock || {}, P = r.practice || {}, C = r.challenge || {};
+  const r = srProfile, s = r.student, L = r.live || {}, M = r.mock || {}, Q = r.pyq || {}, P = r.practice || {}, C = r.challenge || {};
   const del = (kind, id) => `<button class="btn btn-sm sr-del" data-k="${kind}" data-id="${id}" title="Delete this record" type="button">🗑</button>`;
   document.getElementById('sr-profile').innerHTML = `
     <div class="sr-card">
@@ -1610,6 +1625,8 @@ function srRenderProfile(){
         <div class="stat-box"><div class="sv">${pctTxt(L.avg_pct)}</div><div class="sk">Avg live score</div></div>
         <div class="stat-box"><div class="sv">${M.count || 0}</div><div class="sk">Mock tests</div></div>
         <div class="stat-box"><div class="sv">${pctTxt(M.avg_pct)}</div><div class="sk">Avg mock score</div></div>
+        <div class="stat-box"><div class="sv">${Q.count || 0}</div><div class="sk">PYQ papers</div></div>
+        <div class="stat-box"><div class="sv">${pctTxt(Q.avg_pct)}</div><div class="sk">Avg PYQ score</div></div>
         <div class="stat-box"><div class="sv">${P.questions || 0}</div><div class="sk">Practice Qs</div></div>
         <div class="stat-box"><div class="sv">${pctTxt(P.accuracy)}</div><div class="sk">Practice accuracy</div></div>
         <div class="stat-box"><div class="sv">${C.points || 0}</div><div class="sk">Challenge points</div></div>
@@ -1629,6 +1646,14 @@ function srRenderProfile(){
         `<tr><td>${srDate(x.at)}</td><td>${x.total_q}</td><td>${x.correct}</td><td>${x.wrong}</td><td><b>${fmt1(x.marks)}/${fmt1(x.max)}</b></td><td>${pctTxt(x.pct)}</td>
          <td>${x.secs ? Math.round(x.secs / 60) + ' min' : '—'}</td><td>${del('mock', x.id)}</td></tr>`))
         : '<div class="empty-state" style="padding:16px;">No mock tests yet.</div>'}</div>
+
+    <div class="sr-card"><div class="sr-h">📜 Previous year papers <span class="sr-sub">${Q.count || 0} attempted · ${Q.questions || 0} questions · ${Q.correct || 0} correct · best ${pctTxt(Q.best_pct)}</span></div>
+      ${(r.pyq_subjects || []).length ? `<div class="sr-sub" style="margin:4px 0;">Subject-wise</div>` + srTable(['Subject', 'Questions', 'Attempted', 'Correct', 'Score'],
+        r.pyq_subjects.map(x => `<tr><td>${esc(x.subject)}</td><td>${x.questions}</td><td>${x.attempted}</td><td>${x.correct}</td><td><b>${pctTxt(x.pct)}</b></td></tr>`)) : ''}
+      ${(Q.rows || []).length ? `<div class="sr-sub" style="margin:10px 0 4px;">Each paper</div>` + srTable(['Paper', 'Date', 'Correct', 'Wrong', 'Marks', 'Score', 'Time', ''], Q.rows.map(x =>
+        `<tr><td>${esc(x.exam)}<br><span class="sr-sub">${esc(x.paper || '')}</span></td><td>${srDate(x.at)}</td><td>${x.correct}/${x.total_q}</td><td>${x.wrong}</td><td><b>${fmt1(x.marks)}/${fmt1(x.max)}</b></td><td>${pctTxt(x.pct)}</td>
+         <td>${x.secs ? Math.round(x.secs / 60) + ' min' : '—'}</td><td>${del('mock', x.id)}</td></tr>`))
+        : '<div class="empty-state" style="padding:16px;">No previous year papers yet.</div>'}</div>
 
     <div class="sr-card"><div class="sr-h">📚 Practice <span class="sr-sub">${P.sessions || 0} sessions · ${P.attempted || 0} attempted · ${P.correct || 0} correct</span></div>
       ${(r.practice_subjects || []).length ? srTable(['Subject', 'Sessions', 'Questions', 'Attempted', 'Correct', 'Accuracy'],
@@ -1655,7 +1680,7 @@ function srRenderProfile(){
 }
 document.getElementById('sr-profile').addEventListener('click', async (e) => {
   const b = e.target.closest('.sr-del'); if (!b || !srProfile) return;
-  const label = { practice: 'practice session', mock: 'mock test', live_current: 'live-test result', live_history: 'live-test result' }[b.dataset.k];
+  const label = { practice: 'practice session', mock: 'test record', live_current: 'live-test result', live_history: 'live-test result' }[b.dataset.k];
   if (!confirm(`Delete this ${label} of ${srProfile.student.name}?\n\nThis cannot be undone. It does not change your plan's live-test count.`)) return;
   b.disabled = true;
   const res = await rpc('admin_student_delete_record', { ...adminCreds(), p_mobile: srProfile.student.mobile, p_kind: b.dataset.k, p_id: Number(b.dataset.id), p_confirm: null });
@@ -1663,13 +1688,13 @@ document.getElementById('sr-profile').addEventListener('click', async (e) => {
   else { toast((res && res.error) || 'Unable to delete.', 'err'); b.disabled = false; }
 });
 function srPrint(){
-  const r = srProfile, s = r.student, L = r.live || {}, M = r.mock || {}, P = r.practice || {};
+  const r = srProfile, s = r.student, L = r.live || {}, M = r.mock || {}, Q = r.pyq || {}, P = r.practice || {};
   const inst = ((document.querySelector('.brand-l .name') || {}).textContent || '').replace(/\s*—\s*Control Panel\s*$/, '');
   const t = (h, rows) => `<table><tr>${h.map(x => `<th>${x}</th>`).join('')}</tr>${rows.join('')}</table>`;
   const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Report card — ${esc(s.name)}</title><style>
     @page{ size:A4; margin:14mm; } body{ font-family:Arial, sans-serif; color:#1b2a41; font-size:12px; }
     h1{ font-size:20px; margin:0; } h2{ font-size:14px; margin:16px 0 6px; } .sub{ color:#666; }
-    .k{ display:grid; grid-template-columns:repeat(4, 1fr); gap:8px; margin:12px 0; } .k div{ border:1px solid #dfe5ee; border-radius:8px; padding:8px; text-align:center; } .k b{ display:block; font-size:16px; }
+    .k{ display:grid; grid-template-columns:repeat(5, 1fr); gap:8px; margin:12px 0; } .k div{ border:1px solid #dfe5ee; border-radius:8px; padding:8px; text-align:center; } .k b{ display:block; font-size:16px; }
     table{ width:100%; border-collapse:collapse; } th{ background:#1b2a41; color:#fff; padding:5px; text-align:left; font-size:11px; } td{ padding:5px; border-bottom:1px solid #e3e7ee; }
     tr{ page-break-inside:avoid; }</style></head><body>
     <h1>${esc(inst || 'Institute')} — Student report card</h1>
@@ -1677,9 +1702,10 @@ function srPrint(){
     <h2>${esc(s.name)}</h2>
     <div>Mobile: ${esc(s.mobile)}${s.email ? ' · Email: ' + esc(s.email) : ''}${s.class_name ? ' · ' + esc(s.class_name) : ''}${s.semester_year ? ' · ' + esc(s.semester_year) : ''}</div>
     <div class="k"><div>Live tests<b>${L.count || 0}</b>avg ${pctTxt(L.avg_pct)}</div><div>Avg live marks<b>${fmt1(L.avg_marks)}</b>${L.passed || 0} passed</div>
-      <div>Mock tests<b>${M.count || 0}</b>avg ${pctTxt(M.avg_pct)}</div><div>Practice<b>${P.questions || 0} Qs</b>accuracy ${pctTxt(P.accuracy)}</div></div>
+      <div>Mock tests<b>${M.count || 0}</b>avg ${pctTxt(M.avg_pct)}</div><div>PYQ papers<b>${Q.count || 0}</b>avg ${pctTxt(Q.avg_pct)}</div><div>Practice<b>${P.questions || 0} Qs</b>accuracy ${pctTxt(P.accuracy)}</div></div>
     <h2>Live tests</h2>${(L.rows || []).length ? t(['Exam', 'Date', 'Marks', 'Correct', 'Score', 'Result'], L.rows.map(x => `<tr><td>${esc(x.exam)}</td><td>${srDate(x.at)}</td><td>${fmt1(x.marks)}</td><td>${x.correct}/${x.total_q}</td><td>${pctTxt(x.pct)}</td><td>${esc(x.status || '')}</td></tr>`)) : '<p>None.</p>'}
     <h2>Mock tests — subject-wise</h2>${(r.mock_subjects || []).length ? t(['Subject', 'Questions', 'Correct', 'Score'], r.mock_subjects.map(x => `<tr><td>${esc(x.subject)}</td><td>${x.questions}</td><td>${x.correct}</td><td>${pctTxt(x.pct)}</td></tr>`)) : '<p>None.</p>'}
+    <h2>Previous year papers</h2>${(Q.rows || []).length ? t(['Paper', 'Date', 'Marks', 'Correct', 'Score'], Q.rows.slice(0, 30).map(x => `<tr><td>${esc(x.exam)} · ${esc(x.paper || '')}</td><td>${srDate(x.at)}</td><td>${fmt1(x.marks)}/${fmt1(x.max)}</td><td>${x.correct}/${x.total_q}</td><td>${pctTxt(x.pct)}</td></tr>`)) : '<p>None.</p>'}
     <h2>Practice — subject-wise</h2>${(r.practice_subjects || []).length ? t(['Subject', 'Questions', 'Attempted', 'Correct', 'Accuracy'], r.practice_subjects.map(x => `<tr><td>${esc(x.subject)}</td><td>${x.questions}</td><td>${x.attempted}</td><td>${x.correct}</td><td>${pctTxt(x.accuracy)}</td></tr>`)) : '<p>None.</p>'}
     </body></html>`;
   const w = window.open('', '_blank'); if (!w){ toast('Please allow pop-ups to print.', 'err'); return; }
@@ -3412,6 +3438,8 @@ const rtabMock = document.getElementById('rtab-mock');
 const rpanelExam = document.getElementById('rpanel-exam');
 const rpanelPractice = document.getElementById('rpanel-practice');
 const rpanelMock = document.getElementById('rpanel-mock');
+const rtabPyq = document.getElementById('rtab-pyq');
+const rpanelPyq = document.getElementById('rpanel-pyq');
 
 function openResultsSection(){
   showView('view-results');
@@ -3424,6 +3452,9 @@ function setResultsTab(tab){
   rpanelExam.classList.toggle('active', tab === 'exam');
   rpanelPractice.classList.toggle('active', tab === 'practice');
   rpanelMock.classList.toggle('active', tab === 'mock');
+  rtabPyq.classList.toggle('active', tab === 'pyq');
+  rpanelPyq.classList.toggle('active', tab === 'pyq');
+  if (tab === 'pyq') loadPyqResults();
   if (tab === 'exam') loadExamResults();
   if (tab === 'practice') loadPracticeSessions();
   if (tab === 'mock') loadMockTestSummary();
@@ -3431,6 +3462,52 @@ function setResultsTab(tab){
 rtabExam.addEventListener('click', () => setResultsTab('exam'));
 rtabPractice.addEventListener('click', () => setResultsTab('practice'));
 rtabMock.addEventListener('click', () => setResultsTab('mock'));
+rtabPyq.addEventListener('click', () => setResultsTab('pyq'));
+
+/* ---- Results > PYQ (previous year papers attempted by students) ---- */
+const pyqPctCol = v => v >= 60 ? '#27ae60' : v >= 40 ? '#e67e22' : '#e74c3c';
+async function loadPyqResults(){
+  document.getElementById('pyq-res-detail').style.display = 'none';
+  const main = document.getElementById('pyq-res-main'), bar = document.getElementById('pyq-stat-bar');
+  main.style.display = 'block'; main.innerHTML = '<div class="spin"></div>'; bar.innerHTML = '';
+  try{
+    const r = await rpc('admin_pyq_results', { p_admin_id: admin.adminId, p_admin_pass: admin.adminPass });
+    if (!r || !r.ok){ main.innerHTML = '<div class="empty-state">Unable to load PYQ results.</div>'; return; }
+    if (!r.attempts){ main.innerHTML = '<div class="empty-state">No student has attempted a previous year paper yet.</div>'; return; }
+    bar.innerHTML = `
+      <div class="stat-box"><div class="sv">${r.students_n}</div><div class="sk">Students</div></div>
+      <div class="stat-box"><div class="sv">${r.attempts}</div><div class="sk">Papers attempted</div></div>
+      <div class="stat-box"><div class="sv">${r.avg_pct ?? 0}%</div><div class="sk">Avg score</div></div>`;
+    main.innerHTML = `<div class="field-label" style="margin:4px 0 6px;">Paper-wise</div>
+      <div style="overflow-x:auto;"><table class="es-tbl"><thead><tr><th>Exam · Paper</th><th class="r">Attempts</th><th class="r">Students</th><th class="r">Avg</th><th class="r">Best</th></tr></thead><tbody>${
+        r.papers.map(x => `<tr><td><b>${esc(x.exam)}</b> <span class="ms">${esc(x.paper || '')}</span></td><td class="r">${x.attempts}</td><td class="r">${x.students}</td>
+          <td class="r" style="color:${pyqPctCol(x.avg_pct)}; font-weight:700;">${x.avg_pct ?? 0}%</td><td class="r">${x.best_pct ?? 0}%</td></tr>`).join('')}</tbody></table></div>
+      <div class="field-label" style="margin:18px 0 6px;">Students (tap to see every paper)</div>` +
+      r.students.map(x => `<div class="ch-manage-card pyq-stu" style="cursor:pointer;" data-mobile="${esc(x.mobile)}" data-name="${esc(x.name)}">
+        <div class="ch-manage-q">${esc(x.name)} <span class="ms">(${esc(x.mobile)})</span></div>
+        <div class="ms" style="margin:4px 0 2px;">Papers: ${x.attempts} · Avg score: <b style="color:${pyqPctCol(x.avg_pct)};">${x.avg_pct ?? 0}%</b> · Best: ${x.best_pct ?? 0}%</div>
+        <div class="ms">Last attempt: ${esc(new Date(x.last_at).toLocaleString('en-IN', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' }))}</div>
+      </div>`).join('');
+  }catch(err){ main.innerHTML = `<div class="empty-state">Unable to load PYQ results.<br><span style="color:#e74c3c; font-size:11px;">${esc(err.message || '')}</span></div>`; }
+}
+document.getElementById('pyq-res-main').addEventListener('click', async (e) => {
+  const c = e.target.closest('.pyq-stu'); if (!c) return;
+  document.getElementById('pyq-res-main').style.display = 'none';
+  document.getElementById('pyq-res-detail').style.display = 'block';
+  document.getElementById('pyq-res-title').textContent = `${c.dataset.name} (${c.dataset.mobile}) — previous year papers`;
+  const list = document.getElementById('pyq-res-attempts');
+  list.innerHTML = '<div class="spin"></div>';
+  try{
+    const r = await rpc('admin_pyq_attempts', { p_admin_id: admin.adminId, p_admin_pass: admin.adminPass, p_mobile: c.dataset.mobile });
+    const rows = (r && r.ok && r.rows) || [];
+    list.innerHTML = rows.length ? rows.map(x => `<div class="ch-manage-card">
+        <div class="ch-manage-q">${esc(x.exam)} <span class="ms">${esc(x.paper || '')}</span></div>
+        <div class="ms" style="margin:4px 0 2px;">${x.marks}/${x.max} marks (<b style="color:${pyqPctCol(x.pct)};">${x.pct ?? 0}%</b>) · ${x.correct} correct · ${x.wrong} wrong · ${x.not_attempted} skipped</div>
+        <div class="ms">Time taken: ${Math.floor((x.secs || 0) / 60)}m ${(x.secs || 0) % 60}s · ${esc(new Date(x.at).toLocaleString('en-IN', { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' }))}${x.negative ? ' · Negative marking ON' : ''}</div>
+      </div>`).join('') : '<div class="empty-state">No attempts found.</div>';
+  }catch(err){ list.innerHTML = '<div class="empty-state">Unable to load attempts.</div>'; }
+});
+document.getElementById('btn-pyq-detail-back').addEventListener('click', loadPyqResults);
 
 async function loadMockTestSummary(){
   document.getElementById('mock-attempts-detail').style.display = 'none';
