@@ -249,6 +249,7 @@
   .es-sec-row{display:flex; align-items:center; justify-content:space-between; gap:10px; padding:8px 0; border-bottom:1px solid var(--line-soft);}
   .es-sec-row:last-child{border-bottom:none;}
   .es-tbl{width:100%; border-collapse:collapse; font-size:13px;}
+  .beta{display:inline-block; vertical-align:middle; margin-left:4px; padding:0 6px; border-radius:5px; font-size:10px; font-weight:800; background:#f39c12; color:#2b1a00; line-height:1.6;}
   #up-pyq-preview:empty, #up-ca-preview:empty{display:none;}
   .es-tbl th{font-size:10.5px; text-transform:uppercase; letter-spacing:.04em; color:var(--text-mute); text-align:left; padding:6px 6px; border-bottom:1px solid var(--line-soft); white-space:nowrap;}
   .es-tbl td{padding:6px 6px; border-bottom:1px solid var(--line-soft); color:var(--text);}
@@ -596,7 +597,7 @@
       <div class="tab active" id="rtab-exam">Exam results</div>
       <div class="tab" id="rtab-practice">Practice sessions</div>
       <div class="tab" id="rtab-mock">Mock tests</div>
-      <div class="tab" id="rtab-pyq">📜 PYQ</div>
+      <div class="tab" id="rtab-pyq">📜 PYQ<span class="beta">Beta</span></div>
     </div>
 
     <!-- EXAM RESULTS -->
@@ -648,8 +649,8 @@
       <div class="tab active" id="utab-practice">Practice Qs</div>
       <div class="tab" id="utab-exam">Exam Qs</div>
       <div class="tab" id="utab-students">Students</div>
-      <div class="tab" id="utab-pyq">📜 PYQ</div>
-      <div class="tab" id="utab-ca">📰 Current affairs</div>
+      <div class="tab" id="utab-pyq">📜 PYQ<span class="beta">Beta</span></div>
+      <div class="tab" id="utab-ca">📰 Current affairs<span class="beta">Beta</span></div>
     </div>
 
     <!-- PRACTICE QUESTIONS UPLOAD -->
@@ -712,6 +713,7 @@
 
     <!-- PYQ UPLOAD -->
     <div class="ctab-panel" id="upanel-pyq">
+      <div class="upload-hint"><span class="beta" style="margin:0 4px 0 0;">Beta</span> New feature — we are improving it based on student and institute feedback.</div>
       <div class="upload-hint">Previous year questions for your students (SSC, Bank, Railway…). Students see them under <b>📜 Previous year questions</b> and can attempt a full paper or practise topic-wise.</div>
       <div class="upload-hint">Required columns: <code>exam, question, option1, option2, option3, option4, correct_index</code> (0 = A … 3 = D). Recommended: <code>year, shift, subject, topic, solution</code>. Optional: <code>difficulty</code> and image columns. The same question in the same paper is never added twice.</div>
       <button class="btn btn-ghost btn-sm" id="btn-pyq-tpl" style="margin-bottom:12px;">📥 Download CSV template</button>
@@ -727,6 +729,7 @@
 
     <!-- CURRENT AFFAIRS UPLOAD -->
     <div class="ctab-panel" id="upanel-ca">
+      <div class="upload-hint"><span class="beta" style="margin:0 4px 0 0;">Beta</span> New feature — we are improving it based on student and institute feedback.</div>
       <div class="upload-hint">Current affairs MCQs for your students. Give each question its <b>date</b>. Students then get a <b>daily quiz</b> for each date, a <b>monthly test</b> from that month's questions, and a <b>yearly test</b> from the whole year.</div>
       <div class="upload-hint">Required columns: <code>date, question, option1, option2, option3, option4, correct_index</code> (0 = A … 3 = D). Date as <code>2026-10-15</code> or <code>15-10-2026</code>. Recommended: <code>topic</code> (e.g. National, Sports) and <code>solution</code>. The same question on the same date is never added twice.</div>
       <button class="btn btn-ghost btn-sm" id="btn-ca-tpl" style="margin-bottom:12px;">📥 Download CSV template</button>
@@ -903,7 +906,7 @@
       <div class="sr-tabs" id="lb-tabs">
         <button class="sr-tab on" data-lb="live" type="button">Live tests</button>
         <button class="sr-tab" data-lb="mock" type="button">Mock tests</button>
-        <button class="sr-tab" data-lb="pyq" type="button">PYQ</button>
+        <button class="sr-tab" data-lb="pyq" type="button">PYQ<span class="beta">Beta</span></button>
         <button class="sr-tab" data-lb="practice" type="button">Practice</button>
         <button class="sr-tab" data-lb="challenge" type="button">Daily challenge</button>
       </div>
@@ -1386,7 +1389,7 @@ function esc(s){ return String(s == null ? '' : s).replace(/&/g,'&amp;').replace
 /* ---------------- NEW VERSION CHECK ----------------
    "Refresh" reloads data only. When a new file is uploaded to GitHub, this
    notices it (by APP_VERSION) and offers to load the new version. */
-const APP_VERSION = '2026-10-16.1';
+const APP_VERSION = '2026-10-16.2';
 let updShown = false;
 async function checkForUpdate(){
   try{
