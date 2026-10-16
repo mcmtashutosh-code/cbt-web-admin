@@ -249,7 +249,7 @@
   .es-sec-row{display:flex; align-items:center; justify-content:space-between; gap:10px; padding:8px 0; border-bottom:1px solid var(--line-soft);}
   .es-sec-row:last-child{border-bottom:none;}
   .es-tbl{width:100%; border-collapse:collapse; font-size:13px;}
-  #up-pyq-preview:empty{display:none;}
+  #up-pyq-preview:empty, #up-ca-preview:empty{display:none;}
   .es-tbl th{font-size:10.5px; text-transform:uppercase; letter-spacing:.04em; color:var(--text-mute); text-align:left; padding:6px 6px; border-bottom:1px solid var(--line-soft); white-space:nowrap;}
   .es-tbl td{padding:6px 6px; border-bottom:1px solid var(--line-soft); color:var(--text);}
   .es-tbl .r{text-align:right;}
@@ -642,13 +642,14 @@
   <!-- ============ CSV UPLOAD ============ -->
   <div class="view" id="view-upload">
     <div class="section-title">CSV upload</div>
-    <div class="section-sub">Bulk-add practice questions, exam questions, previous year questions, or students.</div>
+    <div class="section-sub">Bulk-add practice questions, exam questions, previous year questions, current affairs, or students.</div>
 
     <div class="tabs">
       <div class="tab active" id="utab-practice">Practice Qs</div>
       <div class="tab" id="utab-exam">Exam Qs</div>
       <div class="tab" id="utab-students">Students</div>
       <div class="tab" id="utab-pyq">📜 PYQ</div>
+      <div class="tab" id="utab-ca">📰 Current affairs</div>
     </div>
 
     <!-- PRACTICE QUESTIONS UPLOAD -->
@@ -721,6 +722,21 @@
       <button class="btn btn-primary" id="btn-up-pyq" style="margin:10px 0 18px;" disabled>📤 Upload PYQ</button>
       <label class="field-label">Papers uploaded <span id="pyq-total"></span></label>
       <div id="pyq-papers-list"><div class="empty-state" style="padding:12px 0;">Loading…</div></div>
+      <div style="height:22px;"></div>
+    </div>
+
+    <!-- CURRENT AFFAIRS UPLOAD -->
+    <div class="ctab-panel" id="upanel-ca">
+      <div class="upload-hint">Current affairs MCQs for your students. Give each question its <b>date</b>. Students then get a <b>daily quiz</b> for each date, a <b>monthly test</b> from that month's questions, and a <b>yearly test</b> from the whole year.</div>
+      <div class="upload-hint">Required columns: <code>date, question, option1, option2, option3, option4, correct_index</code> (0 = A … 3 = D). Date as <code>2026-10-15</code> or <code>15-10-2026</code>. Recommended: <code>topic</code> (e.g. National, Sports) and <code>solution</code>. The same question on the same date is never added twice.</div>
+      <button class="btn btn-ghost btn-sm" id="btn-ca-tpl" style="margin-bottom:12px;">📥 Download CSV template</button>
+      <label class="field-label">CSV file</label>
+      <input type="file" id="up-ca-file" accept=".csv">
+      <div class="upload-hint" id="up-ca-preview" style="margin-top:6px;"></div>
+      <div class="error-text" id="up-ca-status"></div>
+      <button class="btn btn-primary" id="btn-up-ca" style="margin:10px 0 18px;" disabled>📤 Upload current affairs</button>
+      <label class="field-label">Uploaded dates <span id="ca-total"></span></label>
+      <div id="ca-days-list"><div class="empty-state" style="padding:12px 0;">Loading…</div></div>
       <div style="height:22px;"></div>
     </div>
 
@@ -1370,7 +1386,7 @@ function esc(s){ return String(s == null ? '' : s).replace(/&/g,'&amp;').replace
 /* ---------------- NEW VERSION CHECK ----------------
    "Refresh" reloads data only. When a new file is uploaded to GitHub, this
    notices it (by APP_VERSION) and offers to load the new version. */
-const APP_VERSION = '2026-10-14.3';
+const APP_VERSION = '2026-10-16.1';
 let updShown = false;
 async function checkForUpdate(){
   try{
@@ -4009,6 +4025,8 @@ const upanelExam = document.getElementById('upanel-exam');
 const upanelStudents = document.getElementById('upanel-students');
 const utabPyq = document.getElementById('utab-pyq');
 const upanelPyq = document.getElementById('upanel-pyq');
+const utabCa = document.getElementById('utab-ca');
+const upanelCa = document.getElementById('upanel-ca');
 
 function setUploadTab(tab){
   utabPractice.classList.toggle('active', tab === 'practice');
@@ -4021,11 +4039,15 @@ function setUploadTab(tab){
   upanelPyq.classList.toggle('active', tab === 'pyq');
   if (tab === 'exam') loadExamBuildSetup();
   if (tab === 'pyq') loadPyqPapers();
+  utabCa.classList.toggle('active', tab === 'ca');
+  upanelCa.classList.toggle('active', tab === 'ca');
+  if (tab === 'ca') loadCaDays();
 }
 utabPractice.addEventListener('click', () => setUploadTab('practice'));
 utabExam.addEventListener('click', () => setUploadTab('exam'));
 utabStudents.addEventListener('click', () => setUploadTab('students'));
 utabPyq.addEventListener('click', () => setUploadTab('pyq'));
+utabCa.addEventListener('click', () => setUploadTab('ca'));
 
 function wireModeChips(rowId, defaultMode){
   let mode = defaultMode || 'overwrite';
@@ -4086,6 +4108,84 @@ function csvFileToObjects(file){
   });
 }
 
+
+
+/* ---- Current affairs upload ---- */
+const CA_COLS = ['date','question','option1','option2','option3','option4','correct_index','topic','solution',
+  'question_image_url','option_a_image_url','option_b_image_url','option_c_image_url','option_d_image_url'];
+let caRows = [], caDays = [];
+function caDateOk(v){
+  const t = String(v || '').trim();
+  return /^\d{4}-\d{1,2}-\d{1,2}$/.test(t) || /^\d{1,2}[-/.]\d{1,2}[-/.]\d{4}$/.test(t);
+}
+document.getElementById('btn-ca-tpl').addEventListener('click', () => {
+  const ex = ['2026-10-15','Who has been appointed as the new Chief Justice of India?','Option A','Option B','Option C','Option D','1','National','Write a one-line explanation here.','','','','',''];
+  const q = v => /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v;
+  const csv = '﻿' + CA_COLS.join(',') + '\n' + ex.map(q).join(',') + '\n';
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+  a.download = 'Current_Affairs_template.csv'; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+});
+document.getElementById('up-ca-file').addEventListener('change', async () => {
+  const st = document.getElementById('up-ca-status'), pv = document.getElementById('up-ca-preview'), btn = document.getElementById('btn-up-ca');
+  st.textContent = ''; pv.textContent = ''; caRows = []; btn.disabled = true;
+  const f = document.getElementById('up-ca-file').files[0]; if (!f) return;
+  try{
+    const objs = await csvFileToObjects(f);
+    if (!objs.length){ st.textContent = 'The file has no question rows.'; return; }
+    const head = Object.keys(objs[0]).map(h => h.toLowerCase());
+    const miss = ['date','question','option1','option2','option3','option4','correct_index'].filter(c => !head.includes(c));
+    if (miss.length){ st.textContent = 'Missing column(s): ' + miss.join(', '); return; }
+    caRows = objs.map(o => { const r = {}; Object.keys(o).forEach(k => { const lk = k.toLowerCase(); if (CA_COLS.includes(lk)) r[lk] = o[k]; }); return r; });
+    const dates = new Set(caRows.filter(r => caDateOk(r.date)).map(r => r.date.trim()));
+    const badDate = caRows.filter(r => !caDateOk(r.date)).length;
+    const bad = caRows.filter(r => caDateOk(r.date) && (!/^[0-3]$/.test(r.correct_index || '') || (!r.question && !r.question_image_url))).length;
+    pv.innerHTML = `<b>${caRows.length}</b> questions · <b>${dates.size}</b> date(s): ${[...dates].slice(0, 6).map(esc).join(', ')}${dates.size > 6 ? ' …' : ''}` +
+      (badDate ? `<br><span style="color:var(--danger);">${badDate} row(s) have no date or a date in the wrong format — they will be skipped. Use 2026-10-15 or 15-10-2026.</span>` : '') +
+      (bad ? `<br><span style="color:var(--danger);">${bad} row(s) have no question or a correct_index outside 0–3 — they will be skipped.</span>` : '');
+    btn.disabled = false;
+  }catch(e){ st.textContent = 'Could not read the file.'; }
+});
+document.getElementById('btn-up-ca').addEventListener('click', async () => {
+  const st = document.getElementById('up-ca-status'), btn = document.getElementById('btn-up-ca');
+  st.textContent = ''; btn.disabled = true; btn.textContent = 'Uploading…';
+  try{
+    let ins = 0, dup = 0, bad = 0;
+    for (let i = 0; i < caRows.length; i += 500){
+      const r = await rpc('admin_ca_upload', { p_admin_id: admin.adminId, p_admin_pass: admin.adminPass, p_rows: caRows.slice(i, i + 500) });
+      if (!r || !r.ok){ st.textContent = (r && r.error === 'invalid') ? 'Session expired. Please log in again.' : 'Upload failed. Please try again.'; return; }
+      ins += r.inserted; dup += r.duplicates; bad += r.invalid;
+    }
+    toast(`Current affairs uploaded: ${ins} new` + (dup ? `, ${dup} already there` : '') + (bad ? `, ${bad} skipped` : ''), 'ok');
+    document.getElementById('up-ca-file').value = ''; document.getElementById('up-ca-preview').textContent = ''; caRows = [];
+    loadCaDays();
+  }catch(e){ st.textContent = e.message || 'Connection error. Please try again.'; }
+  finally{ btn.textContent = '📤 Upload current affairs'; btn.disabled = !caRows.length; }
+});
+async function loadCaDays(){
+  const box = document.getElementById('ca-days-list');
+  try{
+    const r = await rpc('admin_ca_summary', { p_admin_id: admin.adminId, p_admin_pass: admin.adminPass });
+    if (!r || !r.ok){ box.innerHTML = '<div class="empty-state" style="padding:12px 0;">Unable to load.</div>'; return; }
+    caDays = r.days;
+    document.getElementById('ca-total').textContent = r.total ? `— ${r.total} questions` : '';
+    const fd = d => new Date(d + 'T00:00:00').toLocaleDateString('en-IN', { day:'2-digit', month:'short', year:'numeric' });
+    box.innerHTML = r.days.length ? `<div style="overflow-x:auto;"><table class="es-tbl"><thead><tr><th>Date</th><th class="r">Questions</th><th class="r">No solution</th><th></th></tr></thead><tbody>` +
+      r.days.map((d, i) => `<tr><td><b>${fd(d.d)}</b><div style="font-size:11.5px; color:var(--text-mute);">${esc(d.topics || '')}</div></td>
+        <td class="r">${d.n}</td><td class="r" style="${d.no_solution ? 'color:#e67e22;' : ''}">${d.no_solution}</td>
+        <td><button class="btn btn-danger btn-sm ca-del" data-i="${i}" style="width:auto; padding:5px 10px;">🗑</button></td></tr>`).join('') + '</tbody></table></div>'
+      : '<div class="empty-state" style="padding:12px 0;">No current affairs uploaded yet.</div>';
+  }catch(e){ box.innerHTML = '<div class="empty-state" style="padding:12px 0;">Connection error.</div>'; }
+}
+document.getElementById('ca-days-list').addEventListener('click', async (e) => {
+  const b = e.target.closest('.ca-del'); if (!b) return;
+  const d = caDays[+b.dataset.i];
+  if (!confirm(`Delete all ${d.n} current affairs questions of ${d.d}?\n\nStudents will no longer see them.`)) return;
+  try{
+    const r = await rpc('admin_ca_delete', { p_admin_id: admin.adminId, p_admin_pass: admin.adminPass, p_date: d.d });
+    if (r && r.ok){ toast(`${r.deleted} questions deleted.`, 'ok'); loadCaDays(); } else toast('Unable to delete.', 'err');
+  }catch(err){ toast('Connection error.', 'err'); }
+});
 
 /* ---- PYQ (previous year questions) upload ---- */
 const PYQ_COLS = ['exam','year','shift','question','option1','option2','option3','option4','correct_index','subject','topic','difficulty','solution',
