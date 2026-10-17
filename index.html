@@ -399,13 +399,23 @@
     <div class="exam-window-card" id="wa-link-card" style="flex-direction:column; align-items:stretch; gap:8px; margin-bottom:18px;">
       <div class="ew-left">
         <div class="ew-label">💬 WhatsApp channel or group</div>
-        <div class="ew-status" style="font-size:12px; font-weight:500;">Optional. Paste your institute's WhatsApp channel or group link. Only your students see a "Join on WhatsApp" button on their home screen. Leave empty and save to remove it.</div>
+        <div class="ew-status" style="font-size:12px; font-weight:500;">Optional. Paste your institute's WhatsApp channel or group link. Only your students see a "Join on WhatsApp" button and its QR code on their home screen. Leave empty and save to remove it.</div>
       </div>
       <div style="display:flex; gap:8px; align-items:center;">
         <input id="wa-link-input" type="url" placeholder="https://whatsapp.com/channel/…" style="flex:1; min-width:0; font-size:12px;">
         <button class="btn btn-primary btn-sm" id="btn-wa-save" style="width:auto;">💾 Save</button>
       </div>
+      <label style="display:flex; gap:8px; align-items:center; font-size:13px; cursor:pointer;">
+        <input type="checkbox" id="wa-visible" checked style="width:auto; margin:0;"> Show to students
+      </label>
       <div class="error-text" id="wa-link-err" style="margin:0;"></div>
+      <div id="wa-qr-wrap" style="display:none; gap:14px; align-items:center; flex-wrap:wrap;">
+        <img id="wa-qr" alt="QR code of the WhatsApp link" style="width:130px; height:auto; border-radius:8px; background:#fff;">
+        <div style="flex:1; min-width:150px;">
+          <div class="ew-status" id="wa-qr-note" style="font-size:12px; font-weight:500; margin-bottom:8px;">Students scan this to join. You can also print it on a poster.</div>
+          <button class="btn btn-ghost btn-sm" id="btn-wa-qr-dl" style="width:auto;">⬇ Download QR</button>
+        </div>
+      </div>
     </div>
 
     <div class="menu-grid">
@@ -1411,7 +1421,7 @@ function esc(s){ return String(s == null ? '' : s).replace(/&/g,'&amp;').replace
 /* ---------------- NEW VERSION CHECK ----------------
    "Refresh" reloads data only. When a new file is uploaded to GitHub, this
    notices it (by APP_VERSION) and offers to load the new version. */
-const APP_VERSION = '2026-10-17.2';
+const APP_VERSION = '2026-10-17.3';
 let updShown = false;
 async function checkForUpdate(){
   try{
@@ -2961,18 +2971,40 @@ document.getElementById('btn-copy-join-link').addEventListener('click', async ()
   catch(e){ inp.select(); toast('Link selected. Press Ctrl+C to copy.'); }
 });
 
+let waQrCanvas = null;
+function renderWaQr(link, visible){
+  const wrap = document.getElementById('wa-qr-wrap');
+  if (!link){ wrap.style.display = 'none'; waQrCanvas = null; return; }
+  try{
+    waQrCanvas = dyQrCanvas(link, 'Join us on WhatsApp', 'Scan with your phone camera');
+    document.getElementById('wa-qr').src = waQrCanvas.toDataURL('image/png');
+    document.getElementById('wa-qr-note').textContent = visible
+      ? 'Students see this button and QR on their home screen. You can also print the QR on a poster.'
+      : 'Hidden from students right now. Tick "Show to students" and save to show it again.';
+    wrap.style.display = 'flex';
+  }catch(e){ wrap.style.display = 'none'; }
+}
+document.getElementById('btn-wa-qr-dl').addEventListener('click', () => { if (waQrCanvas) dyQrDownload(waQrCanvas, 'WhatsApp_QR.png'); });
 async function loadWaLink(){
   try{
     const r = await rpc('admin_get_whatsapp', adminCreds());
-    if (r && r.ok) document.getElementById('wa-link-input').value = r.link || '';
+    if (r && r.ok){
+      document.getElementById('wa-link-input').value = r.link || '';
+      document.getElementById('wa-visible').checked = r.visible !== false;
+      renderWaQr(r.link, r.visible !== false);
+    }
   }catch(e){}
 }
 document.getElementById('btn-wa-save').addEventListener('click', async () => {
   const err = document.getElementById('wa-link-err'), btn = document.getElementById('btn-wa-save');
   err.textContent = ''; btn.disabled = true;
   try{
-    const r = await rpc('admin_set_whatsapp', { ...adminCreds(), p_link: document.getElementById('wa-link-input').value.trim() });
-    if (r && r.ok){ document.getElementById('wa-link-input').value = r.link || ''; toast(r.link ? 'WhatsApp link saved. Your students will see it on their home screen.' : 'WhatsApp link removed.', 'ok'); }
+    const r = await rpc('admin_set_whatsapp', { ...adminCreds(), p_link: document.getElementById('wa-link-input').value.trim(), p_visible: document.getElementById('wa-visible').checked });
+    if (r && r.ok){
+      document.getElementById('wa-link-input').value = r.link || '';
+      renderWaQr(r.link, r.visible);
+      toast(!r.link ? 'WhatsApp link removed.' : r.visible ? 'WhatsApp link saved. Your students will see it on their home screen.' : 'WhatsApp link saved and hidden from students.', 'ok');
+    }
     else err.textContent = (r && r.error) || 'Unable to save.';
   }catch(e){ err.textContent = 'Connection error. Please try again.'; }
   finally{ btn.disabled = false; }
