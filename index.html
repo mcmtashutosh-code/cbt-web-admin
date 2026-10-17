@@ -396,6 +396,18 @@
       </div>
     </div>
 
+    <div class="exam-window-card" id="wa-link-card" style="flex-direction:column; align-items:stretch; gap:8px; margin-bottom:18px;">
+      <div class="ew-left">
+        <div class="ew-label">💬 WhatsApp channel or group</div>
+        <div class="ew-status" style="font-size:12px; font-weight:500;">Optional. Paste your institute's WhatsApp channel or group link. Only your students see a "Join on WhatsApp" button on their home screen. Leave empty and save to remove it.</div>
+      </div>
+      <div style="display:flex; gap:8px; align-items:center;">
+        <input id="wa-link-input" type="url" placeholder="https://whatsapp.com/channel/…" style="flex:1; min-width:0; font-size:12px;">
+        <button class="btn btn-primary btn-sm" id="btn-wa-save" style="width:auto;">💾 Save</button>
+      </div>
+      <div class="error-text" id="wa-link-err" style="margin:0;"></div>
+    </div>
+
     <div class="menu-grid">
       <div class="menu-card" id="menu-pendingreg">
         <div class="mi">🆕</div>
@@ -1399,7 +1411,7 @@ function esc(s){ return String(s == null ? '' : s).replace(/&/g,'&amp;').replace
 /* ---------------- NEW VERSION CHECK ----------------
    "Refresh" reloads data only. When a new file is uploaded to GitHub, this
    notices it (by APP_VERSION) and offers to load the new version. */
-const APP_VERSION = '2026-10-17.1';
+const APP_VERSION = '2026-10-17.2';
 let updShown = false;
 async function checkForUpdate(){
   try{
@@ -1841,7 +1853,7 @@ async function openTermsSection(){
   btn.type = 'button'; btn.className = 'ov-toggle'; btn.id = 'ov-toggle';
   btn.innerHTML = '<span class="ot">📋 Institute overview</span><span class="os" id="ov-summary"></span><span class="oc" id="ov-chev"></span>';
   const body = document.createElement('div'); body.id = 'ov-body';
-  ['dash-stats-strip', 'plan-card', 'quota-card', 'join-link-card', 'test-id-card'].forEach(id => { const el = document.getElementById(id); if (el) body.appendChild(el); });
+  ['dash-stats-strip', 'plan-card', 'quota-card', 'join-link-card', 'wa-link-card', 'test-id-card'].forEach(id => { const el = document.getElementById(id); if (el) body.appendChild(el); });
   (sub || grid).parentNode.insertBefore(btn, sub ? sub.nextSibling : grid);
   btn.parentNode.insertBefore(body, btn.nextSibling);
   let open = false;
@@ -2949,8 +2961,25 @@ document.getElementById('btn-copy-join-link').addEventListener('click', async ()
   catch(e){ inp.select(); toast('Link selected. Press Ctrl+C to copy.'); }
 });
 
+async function loadWaLink(){
+  try{
+    const r = await rpc('admin_get_whatsapp', adminCreds());
+    if (r && r.ok) document.getElementById('wa-link-input').value = r.link || '';
+  }catch(e){}
+}
+document.getElementById('btn-wa-save').addEventListener('click', async () => {
+  const err = document.getElementById('wa-link-err'), btn = document.getElementById('btn-wa-save');
+  err.textContent = ''; btn.disabled = true;
+  try{
+    const r = await rpc('admin_set_whatsapp', { ...adminCreds(), p_link: document.getElementById('wa-link-input').value.trim() });
+    if (r && r.ok){ document.getElementById('wa-link-input').value = r.link || ''; toast(r.link ? 'WhatsApp link saved. Your students will see it on their home screen.' : 'WhatsApp link removed.', 'ok'); }
+    else err.textContent = (r && r.error) || 'Unable to save.';
+  }catch(e){ err.textContent = 'Connection error. Please try again.'; }
+  finally{ btn.disabled = false; }
+});
 async function loadDashboardStats(){
   loadJoinLink();
+  loadWaLink();
   loadShareStats();
   loadSubscription();
   loadSupportBadge();
