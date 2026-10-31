@@ -1370,6 +1370,19 @@
     <div id="es-sections-wrap" class="upload-hint">Loading sections...</div>
     <div id="es-timing-box" class="upload-hint" style="display:none; margin-top:8px;">Sections come in the order shown (use ▲ ▼). When a section's time ends, the student moves to the next section automatically and cannot go back; a student cannot move to the next section early. Exam duration = total minutes. A section with 0 questions is left out.</div>
 
+    <label style="display:flex; align-items:center; gap:8px; cursor:pointer; margin:14px 0 8px;">
+      <input type="checkbox" id="es-pq-on" style="width:18px; height:18px; cursor:pointer;">
+      <span>⏱ Time per question: the same time for every question (optional)</span>
+    </label>
+    <div id="es-pq-box" class="upload-hint" style="display:none;">
+      <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:8px;">
+        <span>Seconds per question</span>
+        <input id="es-pq-sec" type="number" min="5" max="600" step="1" placeholder="e.g. 36" style="width:110px;">
+        <b id="es-pq-total"></b>
+      </div>
+      Each question gets this time. The student can press "Save &amp; next" early, but can never go back to an earlier question. When the time ends, the next question opens by itself; after the last question the exam is submitted. Exam duration = questions × seconds. Sectional timing is switched off while this is on.
+    </div>
+
     <label class="field-label">7 · Email result to student (Coming soon)</label>
     <div class="upload-hint" style="margin-bottom:8px;">
       When enabled, students will see an option to email themselves their result + answer key right after submitting.
@@ -1421,7 +1434,7 @@ function esc(s){ return String(s == null ? '' : s).replace(/&/g,'&amp;').replace
 /* ---------------- NEW VERSION CHECK ----------------
    "Refresh" reloads data only. When a new file is uploaded to GitHub, this
    notices it (by APP_VERSION) and offers to load the new version. */
-const APP_VERSION = '2026-10-17.3';
+const APP_VERSION = '2026-10-31.1';
 let updShown = false;
 async function checkForUpdate(){
   try{
@@ -5619,8 +5632,11 @@ async function openExamSettingsSection(){
     esAvailableSections = r.available_sections || {};
     const currentAllocations = r.section_allocations || {};
     const timing = Array.isArray(r.section_timing) ? r.section_timing.map(t => ({ section: t.section, minutes: Number(t.minutes) })) : [];
-    document.getElementById('es-timing-on').checked = timing.length > 0;
+    document.getElementById('es-timing-on').checked = timing.length > 0 && !r.question_seconds;
+    document.getElementById('es-pq-on').checked = !!r.question_seconds;
+    document.getElementById('es-pq-sec').value = r.question_seconds || '';
     renderSectionInputs(currentAllocations, timing);
+    esPqUpdate();
   }catch(err){
     document.getElementById('es-error').textContent = 'Connection error. Please try again.';
   }
@@ -5657,7 +5673,7 @@ function renderSecTable(){
   const wrap = document.getElementById('es-sections-wrap');
   const on = document.getElementById('es-timing-on').checked;
   document.getElementById('es-timing-box').style.display = on ? 'block' : 'none';
-  document.getElementById('es-duration').disabled = on;
+  document.getElementById('es-duration').disabled = on || document.getElementById('es-pq-on').checked;
   if (!esRows.length){ wrap.innerHTML = '<div style="padding:4px 0;">No sections detected. Upload exam questions first.</div>'; return; }
   wrap.innerHTML = `<table class="es-tbl"><thead><tr>${on ? '<th>Order</th>' : ''}<th>Section</th><th class="r">Available</th><th class="r">Questions</th>${on ? '<th class="r">Minutes</th>' : ''}</tr></thead><tbody>${
     esRows.map((r, i) => `<tr class="${on && !r.q ? 'off' : ''}">
@@ -5675,9 +5691,32 @@ function esTotals(){
   const tq = document.getElementById('es-tot-q'); if (tq) tq.textContent = q + ' Q';
   const tm = document.getElementById('es-tot-min'); if (tm) tm.textContent = m + ' min';
   if (document.getElementById('es-timing-on').checked) document.getElementById('es-duration').value = m || '';
+  esPqUpdate();
 }
+/* ---- time per question ---- */
+function esPqUpdate(){
+  const on = document.getElementById('es-pq-on').checked;
+  document.getElementById('es-pq-box').style.display = on ? 'block' : 'none';
+  if (!on){ document.getElementById('es-duration').disabled = document.getElementById('es-timing-on').checked; return; }
+  const sec = parseInt(document.getElementById('es-pq-sec').value, 10) || 0;
+  const q = esRows.reduce((a, r) => a + r.q, 0);
+  const tot = q * sec;
+  document.getElementById('es-pq-total').textContent = sec ? `${q} questions × ${sec} s = ${Math.floor(tot / 60)} min ${tot % 60} s` : '';
+  document.getElementById('es-duration').disabled = true;
+  if (sec) document.getElementById('es-duration').value = Math.max(1, Math.ceil(tot / 60));
+}
+document.getElementById('es-pq-on').addEventListener('change', () => {
+  if (document.getElementById('es-pq-on').checked && document.getElementById('es-timing-on').checked){
+    document.getElementById('es-timing-on').checked = false; renderTimingRows();
+  }
+  esPqUpdate();
+});
+document.getElementById('es-pq-sec').addEventListener('input', esPqUpdate);
 function renderTimingRows(){ esReadTable(); renderSecTable(); }   // kept for the save step
-document.getElementById('es-timing-on').addEventListener('change', renderTimingRows);
+document.getElementById('es-timing-on').addEventListener('change', () => {
+  if (document.getElementById('es-timing-on').checked) document.getElementById('es-pq-on').checked = false;
+  renderTimingRows(); esPqUpdate();
+});
 document.getElementById('es-sections-wrap').addEventListener('input', esTotals);
 document.getElementById('es-sections-wrap').addEventListener('change', (e) => {
   if (e.target.closest('.es-sec-input')) renderTimingRows();   // 0 questions → its minutes box is switched off
@@ -5701,6 +5740,12 @@ document.getElementById('btn-es-save').addEventListener('click', async () => {
     if (!esTiming.length){ errEl.textContent = 'Sectional timing needs at least one section with questions.'; return; }
     const bad = esTiming.filter(t => !(t.minutes >= 1 && t.minutes <= 600));
     if (bad.length){ errEl.textContent = `Please give 1 to 600 minutes to: ${bad.map(t => t.section).join(', ')}`; return; }
+  }
+  const pqOn = document.getElementById('es-pq-on').checked;
+  const pqSec = parseInt(document.getElementById('es-pq-sec').value, 10) || 0;
+  if (pqOn){
+    esPqUpdate();
+    if (!(pqSec >= 5 && pqSec <= 600)){ errEl.textContent = 'Time per question must be 5 to 600 seconds.'; return; }
   }
   const duration = parseFloat(document.getElementById('es-duration').value);
   const marksCorrect = parseFloat(document.getElementById('es-marks-correct').value);
@@ -5730,6 +5775,7 @@ document.getElementById('btn-es-save').addEventListener('click', async () => {
     `Please verify before syncing to Cloud:\n\n` +
     `⏱ Exam Duration   : ${duration} minutes\n` +
     (timingOn ? `⏳ Sectional timing: ${esTiming.map(t => `${t.section} ${t.minutes} min`).join(' → ')}\n` : '') +
+    (pqOn ? `⏱ Time per question: ${pqSec} seconds (no going back)\n` : '') +
     `🎯 Passing Criteria: ${passingValue} (${passingType})\n` +
     `📝 Total Questions : ${totalQ}\n` +
     `📚 Section-wise Breakup:\n${secLines}\n\n` +
@@ -5755,6 +5801,15 @@ document.getElementById('btn-es-save').addEventListener('click', async () => {
     try{
       tr = await rpc('admin_set_section_timing', { p_admin_id: admin.adminId, p_admin_pass: admin.adminPass,
         p_timing: timingOn ? esTiming.map(t => ({ section: t.section, minutes: t.minutes })) : [] });
+      // time per question (after sectional timing, which it replaces when on)
+      let qr = null;
+      try{ qr = await rpc('admin_set_question_timing', { p_admin_id: admin.adminId, p_admin_pass: admin.adminPass, p_seconds: pqOn ? pqSec : 0 }); }
+      catch(e3){ if (pqOn){ errEl.textContent = 'Settings saved, but time per question is not set up in the database yet (run zk_question_timing.sql).'; return; } }
+      if (pqOn){
+        if (qr && qr.ok){ toast(`Exam settings saved. Time per question: ${pqSec} s × ${qr.questions} questions.`, 'ok'); }
+        else errEl.textContent = 'Settings saved, but time per question was not: ' + ((qr && qr.error) || 'unknown error');
+        return;
+      }
     }catch(e2){
       if (timingOn) errEl.textContent = 'Settings saved, but sectional timing is not set up in the database yet (run x_sectional_timing.sql).';
       else toast('Exam settings synced to cloud successfully.', 'ok');
