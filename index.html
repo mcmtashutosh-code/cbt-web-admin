@@ -1,4 +1,17 @@
 <!DOCTYPE html>
+<!--
+  Dhyeodaya — Institute Admin Dashboard
+  Copyright (c) 2026 Ashutosh Kumar Dubey. All rights reserved.
+
+  This software and its source code are the property of Ashutosh Kumar Dubey ("Dhyeodaya").
+  No part of it may be copied, modified, distributed, hosted or used to provide
+  a similar service without the prior written permission of the copyright owner.
+  Viewing this page in a web browser does not grant any licence to its code.
+
+  Third-party code included in this file, used under its own licence:
+  - qrcode-generator, Copyright (c) 2009 Kazuhiko Arase, MIT licence
+  Contact: dhyeodaya@gmail.com
+-->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -322,7 +335,7 @@
       <div class="error-text" id="login-error"></div>
       <button class="btn btn-primary" id="btn-login" style="margin-top:6px;">Sign in</button>
     </div>
-    <div class="footer"><span class="lock">Powered by <b>Dhyeodaya</b></span> · तैयारी से सफलता तक<br>© 2026 Dhyeodaya · All Rights Reserved</div>
+    <div class="footer"><span class="lock">Powered by <b>Dhyeodaya</b></span> · तैयारी से सफलता तक<br>© 2026 Ashutosh Kumar Dubey (Dhyeodaya) · All rights reserved</div>
   </div>
 
   <!-- ============ MENU ============ -->
@@ -500,7 +513,7 @@
         <div class="ms">Duration, marks, passing criteria, section-wise question count</div>
       </div>
     </div>
-    <div class="footer"><span class="lock">Powered by <b>Dhyeodaya</b></span> · तैयारी से सफलता तक<br>© 2026 Dhyeodaya · All Rights Reserved</div>
+    <div class="footer"><span class="lock">Powered by <b>Dhyeodaya</b></span> · तैयारी से सफलता तक<br>© 2026 Ashutosh Kumar Dubey (Dhyeodaya) · All rights reserved</div>
   </div>
 
   <!-- ============ FEEDBACK MANAGEMENT ============ -->
@@ -518,7 +531,7 @@
     </div>
 
     <div id="fb-list"><div class="spin"></div></div>
-    <div class="footer"><span class="lock">Powered by <b>Dhyeodaya</b></span> · तैयारी से सफलता तक<br>© 2026 Dhyeodaya · All Rights Reserved</div>
+    <div class="footer"><span class="lock">Powered by <b>Dhyeodaya</b></span> · तैयारी से सफलता तक<br>© 2026 Ashutosh Kumar Dubey (Dhyeodaya) · All rights reserved</div>
   </div>
 
   <!-- ============ CHALLENGE MANAGEMENT ============ -->
@@ -858,7 +871,7 @@
     <div class="ctab-panel" id="preg-panel-all">
       <div id="allselfreg-list" style="margin-top:16px;"><div class="spin"></div></div>
     </div>
-    <div class="footer"><span class="lock">Powered by <b>Dhyeodaya</b></span> · तैयारी से सफलता तक<br>© 2026 Dhyeodaya · All Rights Reserved</div>
+    <div class="footer"><span class="lock">Powered by <b>Dhyeodaya</b></span> · तैयारी से सफलता तक<br>© 2026 Ashutosh Kumar Dubey (Dhyeodaya) · All rights reserved</div>
   </div>
 
   <div class="view" id="view-messages">
@@ -925,7 +938,7 @@
       <div id="msg-threads-list"><div class="spin"></div></div>
     </div>
 
-    <div class="footer"><span class="lock">Powered by <b>Dhyeodaya</b></span> · तैयारी से सफलता तक<br>© 2026 Dhyeodaya · All Rights Reserved</div>
+    <div class="footer"><span class="lock">Powered by <b>Dhyeodaya</b></span> · तैयारी से सफलता तक<br>© 2026 Ashutosh Kumar Dubey (Dhyeodaya) · All rights reserved</div>
   </div>
 
   <!-- ============ ADMIN CREDENTIALS ============ -->
@@ -1434,7 +1447,7 @@ function esc(s){ return String(s == null ? '' : s).replace(/&/g,'&amp;').replace
 /* ---------------- NEW VERSION CHECK ----------------
    "Refresh" reloads data only. When a new file is uploaded to GitHub, this
    notices it (by APP_VERSION) and offers to load the new version. */
-const APP_VERSION = '2026-10-31.1';
+const APP_VERSION = '2026-11-02.1';
 let updShown = false;
 async function checkForUpdate(){
   try{
@@ -3766,6 +3779,11 @@ async function loadExamResults(){
 }
 
 /* ---------------- SHAREABLE RESULTS (masked mobile numbers: first 2 + last 3) ---------------- */
+function fmtTaken(sec){
+  if (sec === null || sec === undefined || sec === '') return '-';
+  const t = Math.max(0, Math.round(Number(sec) || 0)), h = Math.floor(t / 3600), m = Math.floor((t % 3600) / 60), x = t % 60;
+  return h ? `${h}h ${String(m).padStart(2, '0')}m` : `${m}m ${String(x).padStart(2, '0')}s`;
+}
 function maskMobileShare(m){
   const d = String(m || '');
   if (d.length <= 3) return d;
@@ -3799,7 +3817,7 @@ document.getElementById('btn-export-exam-pdf').addEventListener('click', async (
                  || (b.r.correct || 0) - (a.r.correct || 0)
                  || String(a.r.name || '').localeCompare(String(b.r.name || '')));
   let rank = 0, prevMarks = null;
-  const tIST = t => t ? new Date(t).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'Asia/Kolkata' }).toUpperCase() : '-';
+  const tTaken = r => fmtTaken(r.time_taken_seconds);
   const rowsHtml = list.map((x, i) => {
     const marks = Number(x.r.final_marks) || 0;
     if (marks !== prevMarks){ rank = i + 1; prevMarks = marks; }
@@ -3811,7 +3829,7 @@ document.getElementById('btn-export-exam-pdf').addEventListener('click', async (
       <td class="c">${rank}</td><td>${esc(x.r.name || '')}</td><td class="c mono">${esc(maskMobileShare(x.r.mobile))}</td>
       <td class="c">${c}</td><td class="c">${w}</td><td class="c">${na}</td><td class="c b">${fmtM(marks)}</td>
       <td class="c">${x.pct.toFixed(1)}%</td><td class="c b ${x.status === 'PASS' ? 'pass' : 'fail'}">${x.status}</td>
-      <td class="c">${tIST(x.r.submitted_at)}</td>${isHistory ? '' : `<td class="c">${tab || fs ? tab + ' / ' + fs : '-'}</td>`}</tr>`;
+      <td class="c">${tTaken(x.r)}</td>${isHistory ? '' : `<td class="c">${tab || fs ? tab + ' / ' + fs : '-'}</td>`}</tr>`;
   }).join('');
 
   const marksArr = list.map(x => Number(x.r.final_marks) || 0);
@@ -3860,7 +3878,7 @@ document.getElementById('btn-export-exam-pdf').addEventListener('click', async (
         ${tile('Lowest', fmtM(Math.min(...marksArr)) + '/' + fmtM(maxMarks))}${tile('Not submitted', isHistory ? '–' : notSubmitted.length)}
       </div>
       <h2>Merit list</h2>
-      <table><thead><tr><th>Rank</th><th>Name</th><th>Mobile</th><th>Correct</th><th>Wrong</th><th>Not<br>attempted</th><th>Marks<br>(/${fmtM(maxMarks)})</th><th>%</th><th>Result</th><th>Submitted<br>(IST)</th>${isHistory ? '' : '<th>Tab sw. /<br>FS exits</th>'}</tr></thead>
+      <table><thead><tr><th>Rank</th><th>Name</th><th>Mobile</th><th>Correct</th><th>Wrong</th><th>Not<br>attempted</th><th>Marks<br>(/${fmtM(maxMarks)})</th><th>%</th><th>Result</th><th>Time<br>taken</th>${isHistory ? '' : '<th>Tab sw. /<br>FS exits</th>'}</tr></thead>
         <tbody>${rowsHtml}</tbody></table>
       ${nsHtml}
       <div class="foot">Rank is by marks; equal marks share the same rank. 'Not attempted' = ${totalQ} − correct − wrong.${isHistory ? '' : ' Tab sw. / FS exits = tab switches / fullscreen exits recorded during the test.'}
@@ -4000,7 +4018,7 @@ function renderExamResults(rows){
           <div class="res-name">${esc(row.name)}</div>
           <span class="res-pill ${status === 'PASS' ? 'res-pass' : 'res-fail'}">${status}</span>
         </div>
-        <div class="res-meta">ID: ${esc(maskMobile(row.mobile))} · ${row.total_q || 0} Q · ✔ ${row.correct || 0} · ✘ ${row.wrong || 0} · Marks: ${row.final_marks || 0} (${pct}%)${dt ? ' · '+esc(dt) : ''}</div>
+        <div class="res-meta">ID: ${esc(maskMobile(row.mobile))} · ${row.total_q || 0} Q · ✔ ${row.correct || 0} · ✘ ${row.wrong || 0} · Marks: ${row.final_marks || 0} (${pct}%)${row.time_taken_seconds != null ? ' · Time: ' + fmtTaken(row.time_taken_seconds) : ''}${dt ? ' · '+esc(dt) : ''}</div>
         <div class="res-actions"><button class="btn btn-danger btn-sm btn-del-result" data-mobile="${esc(row.mobile)}">Delete</button></div>
       </div>`;
   }).join('');
