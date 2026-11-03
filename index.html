@@ -539,6 +539,22 @@
     <div class="section-title">Today's challenge</div>
     <div class="section-sub">Post questions, manage today's set, and view results.</div>
 
+    <div class="upload-hint" id="ch-neg-box" style="margin-bottom:14px;">
+      <div style="font-weight:700; color:var(--text); font-size:13px; margin-bottom:8px;">➖ Negative marking for a wrong answer</div>
+      <div style="display:flex; gap:8px; align-items:center;">
+        <select id="ch-neg" style="flex:1;">
+          <option value="0">No negative marking</option>
+          <option value="1">−1 point per wrong answer</option>
+          <option value="2">−2 points per wrong answer</option>
+          <option value="3">−3 points per wrong answer</option>
+          <option value="4">−4 points per wrong answer</option>
+          <option value="5">−5 points per wrong answer</option>
+        </select>
+        <button type="button" class="btn btn-primary btn-sm" id="btn-ch-neg-save" style="width:auto; white-space:nowrap;">Save</button>
+      </div>
+      <div id="ch-neg-note" style="margin-top:8px;">Correct answers earn 1–5 points for speed. A question left unanswered gets 0. The setting applies to new challenges (posted or automatic) and to today's challenges that nobody has attempted yet.</div>
+    </div>
+
     <div class="tabs">
       <div class="tab active" id="ctab-post">Post new</div>
       <div class="tab" id="ctab-manage">Manage today</div>
@@ -1447,7 +1463,7 @@ function esc(s){ return String(s == null ? '' : s).replace(/&/g,'&amp;').replace
 /* ---------------- NEW VERSION CHECK ----------------
    "Refresh" reloads data only. When a new file is uploaded to GitHub, this
    notices it (by APP_VERSION) and offers to load the new version. */
-const APP_VERSION = '2026-11-02.1';
+const APP_VERSION = '2026-11-03.1';
 let updShown = false;
 async function checkForUpdate(){
   try{
@@ -3254,7 +3270,29 @@ const cpanelOverall = document.getElementById('cpanel-overall');
 function openChallengeSection(){
   showView('view-challenge');
   setChallengeTab('post');
+  loadChallengeNegative();
 }
+
+async function loadChallengeNegative(){
+  try{
+    const r = await rpc('admin_challenge_settings_get', adminCreds());
+    if (r && r.ok) document.getElementById('ch-neg').value = String(r.wrong_penalty || 0);
+  }catch(e){ /* keep the default shown */ }
+}
+document.getElementById('btn-ch-neg-save').addEventListener('click', async () => {
+  const btn = document.getElementById('btn-ch-neg-save');
+  const v = parseInt(document.getElementById('ch-neg').value, 10) || 0;
+  btn.disabled = true;
+  try{
+    const r = await rpc('admin_challenge_settings_save', { ...adminCreds(), p_wrong_penalty: v });
+    if (r && r.ok){
+      const open = Number(r.updated_open) || 0;
+      toast((v ? `Negative marking set to −${v} for a wrong answer.` : 'Negative marking turned off.')
+        + (open ? ` Applied to ${open} open challenge${open === 1 ? '' : 's'} as well.` : ''), 'ok');
+    } else toast((r && r.error) || 'Unable to save the setting.', 'err');
+  }catch(e){ toast('Connection error.', 'err'); }
+  btn.disabled = false;
+});
 
 function setChallengeTab(tab){
   ctabPost.classList.toggle('active', tab === 'post');
