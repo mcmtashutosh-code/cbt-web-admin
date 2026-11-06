@@ -15,7 +15,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-RyXUVtvZKh70ZcRllHJgYey7mFCcBGYPMdMrBi0L3QE='; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https:; connect-src 'self' https://iyzujwixwfydmkzmhrxo.supabase.co; media-src 'self' blob: https:; frame-src 'self' blob:; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-Uszo3pqV8NerBlV8epsVTaJKeiIElFtQvVtrR8LL6SQ='; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https:; connect-src 'self' https://iyzujwixwfydmkzmhrxo.supabase.co; media-src 'self' blob: https:; frame-src 'self' blob:; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
 <title>Admin Dashboard — Dhyeodaya</title>
 <link rel="manifest" href="manifest-admin.json">
@@ -983,6 +983,12 @@
     </div>
 
     <div id="sr-profile"></div>
+
+    <div class="sr-card">
+      <div class="sr-h">🗑 Deleted accounts <span class="sr-sub" id="dl-sum"></span></div>
+      <div id="dl-out"><div class="spin"></div></div>
+      <div class="sr-note">Accounts deleted by the student (from their profile) or by an admin. Only the last 3 digits of the mobile number are kept; everything else about the student is erased.</div>
+    </div>
   </div>
 
   <div class="view" id="view-terms">
@@ -1464,10 +1470,10 @@ function esc(s){ return String(s == null ? '' : s).replace(/&/g,'&amp;').replace
 /* ---------------- NEW VERSION CHECK ----------------
    "Refresh" reloads data only. When a new file is uploaded to GitHub, this
    notices it (by APP_VERSION) and offers to load the new version. */
-const APP_VERSION = '2026-11-06.4';
+const APP_VERSION = '2026-11-06.5';
 /* What's new: shown in the update banner, and once after the app updates. Newest first, keep a few.
    Add an entry here with every new APP_VERSION. */
-const APP_NOTES = /*NOTES*/[{"v": "2026-11-06.4", "date": "6 Nov 2026", "items": ["Student records: delete a student's account completely on request (the student can also do it from their profile)."]},{"v": "2026-11-06.3", "date": "6 Nov 2026", "items": ["Privacy Policy link added at the bottom of the panel (share it with students and parents)."]},{"v": "2026-11-06.2", "date": "6 Nov 2026", "items": ["You will now see what is new whenever the panel is updated."]}, {"v": "2026-11-06.1", "date": "6 Nov 2026", "items": ["Security update: the panel only runs its own code; the Excel library is now served from this site.", "Students' practice and mock tests now load only the chosen topics (faster, less data)."]}, {"v": "2026-11-03.1", "date": "3 Nov 2026", "items": ["Today's challenge: set negative marking for a wrong answer (off, or -1 to -5 points)."]}, {"v": "2026-11-02.1", "date": "2 Nov 2026", "items": ["Live exam result PDF: 'Time taken' column instead of 'Submitted (IST)'."]}]/*END*/;
+const APP_NOTES = /*NOTES*/[{"v": "2026-11-06.5", "date": "6 Nov 2026", "items": ["Student records: see how many accounts were deleted, when, and whether by the student or an admin."]},{"v": "2026-11-06.4", "date": "6 Nov 2026", "items": ["Student records: delete a student's account completely on request (the student can also do it from their profile)."]},{"v": "2026-11-06.3", "date": "6 Nov 2026", "items": ["Privacy Policy link added at the bottom of the panel (share it with students and parents)."]},{"v": "2026-11-06.2", "date": "6 Nov 2026", "items": ["You will now see what is new whenever the panel is updated."]}, {"v": "2026-11-06.1", "date": "6 Nov 2026", "items": ["Security update: the panel only runs its own code; the Excel library is now served from this site.", "Students' practice and mock tests now load only the chosen topics (faster, less data)."]}, {"v": "2026-11-03.1", "date": "3 Nov 2026", "items": ["Today's challenge: set negative marking for a wrong answer (off, or -1 to -5 points)."]}, {"v": "2026-11-02.1", "date": "2 Nov 2026", "items": ["Live exam result PDF: 'Time taken' column instead of 'Submitted (IST)'."]}]/*END*/;
 const WN_KEY = 'dy_seen_version_admin';
 let updNewNotes = [];
 function wnParse(text){
@@ -1672,9 +1678,23 @@ let lbData = null, lbTab = 'live', srProfile = null;
 const fmt1 = v => (v === null || v === undefined || v === '') ? '—' : String(v);
 const pctTxt = v => (v === null || v === undefined) ? '—' : `${v}%`;
 const srDate = d => d ? new Date(d).toLocaleDateString('en-IN', { day:'2-digit', month:'short', year:'numeric' }) : '—';
+async function srLoadDeletions(){
+  const out = document.getElementById('dl-out'), sum = document.getElementById('dl-sum');
+  try{
+    const r = await rpc('admin_account_deletions', adminCreds());
+    if (!r || !r.ok){ out.innerHTML = '<div class="empty-state" style="padding:12px;">Unable to load.</div>'; return; }
+    sum.textContent = `${r.total} total · ${r.this_month} this month · ${r.by_student} by students · ${r.by_admin} by admin`;
+    out.innerHTML = r.rows.length ? `<details><summary style="cursor:pointer; font-size:13px; margin:4px 0 8px;">Show the list (${r.rows.length})</summary>` +
+      srTable(['Date', 'Deleted by', 'Student', 'Records erased'], r.rows.map(x =>
+        `<tr><td>${esc(new Date(x.at).toLocaleString('en-IN', { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' }))}</td>` +
+        `<td>${x.by === 'admin' ? 'Admin' + (x.admin ? ' (' + esc(x.admin) + ')' : '') : 'Student (self)'}</td><td class="mono">${esc(x.student)}</td><td>${Number(x.records) || 0}</td></tr>`)) + '</details>'
+      : '<div class="empty-state" style="padding:12px;">No account has been deleted.</div>';
+  }catch(e){ out.innerHTML = '<div class="empty-state" style="padding:12px;">Unable to load.</div>'; }
+}
 async function openStudentsSection(){
   showView('view-students');
   srLoadLeaderboards();
+  srLoadDeletions();
   setTimeout(() => document.getElementById('sr-q').focus(), 200);
 }
 async function srLoadLeaderboards(){
@@ -1814,7 +1834,7 @@ function srRenderProfile(){
     if (res && res.ok){
       toast('Account deleted.', 'ok');
       document.getElementById('sr-profile').innerHTML = '<div class="empty-state" style="padding:16px;">The account was deleted.</div>';
-      srLoadLeaderboards();
+      srLoadLeaderboards(); srLoadDeletions();
     } else toast((res && res.error) || 'Unable to delete.', 'err');
   });
   document.getElementById('sr-del-all').addEventListener('click', async () => {
