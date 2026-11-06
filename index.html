@@ -15,7 +15,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-0WDW0dIrBO9xDea1nQa/mfYt1wgezMnPiZV2QqnXHJE='; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https:; connect-src 'self' https://iyzujwixwfydmkzmhrxo.supabase.co; media-src 'self' blob: https:; frame-src 'self' blob:; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-RyXUVtvZKh70ZcRllHJgYey7mFCcBGYPMdMrBi0L3QE='; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https:; connect-src 'self' https://iyzujwixwfydmkzmhrxo.supabase.co; media-src 'self' blob: https:; frame-src 'self' blob:; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
 <title>Admin Dashboard — Dhyeodaya</title>
 <link rel="manifest" href="manifest-admin.json">
@@ -1464,10 +1464,10 @@ function esc(s){ return String(s == null ? '' : s).replace(/&/g,'&amp;').replace
 /* ---------------- NEW VERSION CHECK ----------------
    "Refresh" reloads data only. When a new file is uploaded to GitHub, this
    notices it (by APP_VERSION) and offers to load the new version. */
-const APP_VERSION = '2026-11-06.3';
+const APP_VERSION = '2026-11-06.4';
 /* What's new: shown in the update banner, and once after the app updates. Newest first, keep a few.
    Add an entry here with every new APP_VERSION. */
-const APP_NOTES = /*NOTES*/[{"v": "2026-11-06.3", "date": "6 Nov 2026", "items": ["Privacy Policy link added at the bottom of the panel (share it with students and parents)."]},{"v": "2026-11-06.2", "date": "6 Nov 2026", "items": ["You will now see what is new whenever the panel is updated."]}, {"v": "2026-11-06.1", "date": "6 Nov 2026", "items": ["Security update: the panel only runs its own code; the Excel library is now served from this site.", "Students' practice and mock tests now load only the chosen topics (faster, less data)."]}, {"v": "2026-11-03.1", "date": "3 Nov 2026", "items": ["Today's challenge: set negative marking for a wrong answer (off, or -1 to -5 points)."]}, {"v": "2026-11-02.1", "date": "2 Nov 2026", "items": ["Live exam result PDF: 'Time taken' column instead of 'Submitted (IST)'."]}]/*END*/;
+const APP_NOTES = /*NOTES*/[{"v": "2026-11-06.4", "date": "6 Nov 2026", "items": ["Student records: delete a student's account completely on request (the student can also do it from their profile)."]},{"v": "2026-11-06.3", "date": "6 Nov 2026", "items": ["Privacy Policy link added at the bottom of the panel (share it with students and parents)."]},{"v": "2026-11-06.2", "date": "6 Nov 2026", "items": ["You will now see what is new whenever the panel is updated."]}, {"v": "2026-11-06.1", "date": "6 Nov 2026", "items": ["Security update: the panel only runs its own code; the Excel library is now served from this site.", "Students' practice and mock tests now load only the chosen topics (faster, less data)."]}, {"v": "2026-11-03.1", "date": "3 Nov 2026", "items": ["Today's challenge: set negative marking for a wrong answer (off, or -1 to -5 points)."]}, {"v": "2026-11-02.1", "date": "2 Nov 2026", "items": ["Live exam result PDF: 'Time taken' column instead of 'Submitted (IST)'."]}]/*END*/;
 const WN_KEY = 'dy_seen_version_admin';
 let updNewNotes = [];
 function wnParse(text){
@@ -1803,8 +1803,20 @@ function srRenderProfile(){
 
     <div class="sr-card sr-danger"><div class="sr-h">⚠️ Delete all activity</div>
       <div class="sr-sub" style="margin-bottom:8px;">Permanently deletes this student's live-test results, mock tests, practice sessions, daily-challenge attempts and challenge points. The student's account is kept and can still sign in. Records can be deleted, never edited, and every deletion is logged.</div>
-      <button class="btn btn-sm" id="sr-del-all" type="button" style="border-color:#e74c3c; color:#ff8a7d;">🗑 Delete all activity…</button></div>`;
+      <button class="btn btn-sm" id="sr-del-all" type="button" style="border-color:#e74c3c; color:#ff8a7d;">🗑 Delete all activity…</button>
+      <div class="sr-sub" style="margin:14px 0 8px;">On a student's or parent's request you can delete the <b>account itself</b> as well: the student is removed from your institute together with all records, messages and feedback, and can no longer sign in.</div>
+      <button class="btn btn-sm" id="sr-del-acc" type="button" style="border-color:#e74c3c; color:#ff8a7d;">🗑 Delete account completely…</button></div>`;
   document.getElementById('sr-print').addEventListener('click', srPrint);
+  document.getElementById('sr-del-acc').addEventListener('click', async () => {
+    const typed = prompt(`Delete the ACCOUNT of ${s.name} completely?\n\nThe student will be removed with all results, history, messages and feedback, and cannot sign in again. This cannot be undone.\n\nTo confirm, type the student's mobile number:`);
+    if (typed === null) return;
+    const res = await rpc('admin_delete_student_account', { ...adminCreds(), p_mobile: s.mobile, p_confirm: typed.trim() });
+    if (res && res.ok){
+      toast('Account deleted.', 'ok');
+      document.getElementById('sr-profile').innerHTML = '<div class="empty-state" style="padding:16px;">The account was deleted.</div>';
+      srLoadLeaderboards();
+    } else toast((res && res.error) || 'Unable to delete.', 'err');
+  });
   document.getElementById('sr-del-all').addEventListener('click', async () => {
     const typed = prompt(`Delete ALL activity records of ${s.name}?\n\nThis cannot be undone. To confirm, type the student's mobile number:`);
     if (typed === null) return;
