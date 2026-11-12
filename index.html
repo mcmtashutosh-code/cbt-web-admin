@@ -15,7 +15,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-IqFM+U/bDG9GyCTW7X4EdqWyTsBHR63vqtjRYt60OEQ='; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https:; connect-src 'self' https://iyzujwixwfydmkzmhrxo.supabase.co; media-src 'self' blob: https:; frame-src 'self' blob:; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-j210DfvqsOpvwPekOs8SsBooXAXXv1NDbJg+Usd9Boo='; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https:; connect-src 'self' https://iyzujwixwfydmkzmhrxo.supabase.co; media-src 'self' blob: https:; frame-src 'self' blob:; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
 <title>Admin Dashboard — Dhyeodaya</title>
 <link rel="manifest" href="manifest-admin.json">
@@ -578,6 +578,16 @@
       <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:8px;">
         <button type="button" class="btn btn-danger btn-sm" id="btn-ch-lbr" style="width:auto;">♻️ Reset leaderboard</button>
         <button type="button" class="btn btn-ghost btn-sm" id="btn-ch-lbr-undo" style="width:auto; display:none;">↩ Undo last reset</button>
+      </div>
+      <div id="ch-lbr-confirm" style="display:none; margin-top:10px; padding:12px; border:1px solid var(--danger); border-radius:10px;">
+        <div id="ch-lbr-confirm-text" style="font-size:13px; color:var(--text); margin-bottom:8px; white-space:pre-line;"></div>
+        <label for="ch-lbr-pass" style="font-size:12.5px;">Enter your admin password to confirm</label>
+        <input type="password" id="ch-lbr-pass" autocomplete="current-password" style="width:100%; margin:4px 0 8px;">
+        <div id="ch-lbr-err" style="color:var(--danger); font-size:12.5px; min-height:16px;"></div>
+        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+          <button type="button" class="btn btn-danger btn-sm" id="btn-ch-lbr-go" style="width:auto;">Confirm reset</button>
+          <button type="button" class="btn btn-ghost btn-sm" id="btn-ch-lbr-cancel" style="width:auto;">Cancel</button>
+        </div>
       </div>
       <div style="margin-top:8px; font-size:12px;">Nothing is deleted. Students keep their lifetime points in My report and their milestones; only the leaderboard starts again from 0. The most recent reset can be undone.</div>
     </div>
@@ -1518,10 +1528,10 @@ function esc(s){ return String(s == null ? '' : s).replace(/&/g,'&amp;').replace
 /* ---------------- NEW VERSION CHECK ----------------
    "Refresh" reloads data only. When a new file is uploaded to GitHub, this
    notices it (by APP_VERSION) and offers to load the new version. */
-const APP_VERSION = '2026-11-12.1';
+const APP_VERSION = '2026-11-12.3';
 /* What's new: shown in the update banner, and once after the app updates. Newest first, keep a few.
    Add an entry here with every new APP_VERSION. */
-const APP_NOTES = /*NOTES*/[{"v": "2026-11-12.1", "date": "12 Nov 2026", "items": ["Daily challenge: reset today's or the overall leaderboard (or both) when you start a new challenge, with an optional notice to all students. The last reset can be undone."]},{"v": "2026-11-07.4", "date": "7 Nov 2026", "items": ["Dussehra effect: a bow in the corner now draws back and shoots burning arrows."]},{"v": "2026-11-07.3", "date": "7 Nov 2026", "items": ["Festival effects for Dussehra and New Year added. The tap effect now works on every button and link, and keeps working after you close the greeting."]},{"v": "2026-11-07.2", "date": "7 Nov 2026", "items": ["Festival greeting for institute admins can now be different from the students' greeting."]},{"v": "2026-11-07.1", "date": "7 Nov 2026", "items": ["Festival greetings in the admin panel too: crackers on Diwali, colours on Holi, and a burst on every button while the platform has them on."]},{"v": "2026-11-06.9", "date": "6 Nov 2026", "items": ["Small fixes."]},{"v": "2026-11-06.7", "date": "6 Nov 2026", "items": ["Reports are saved as PDF under the institute's name and the period (for example: Sunrise Academy - Institute Report - 01 Oct 2026 to 31 Oct 2026)."]},{"v": "2026-11-06.6", "date": "6 Nov 2026", "items": ["New 'Institute report': a complete report for any period (students, exams, toppers, tests, practice, challenge, reach) to print or save as PDF."]},{"v": "2026-11-06.5", "date": "6 Nov 2026", "items": ["Student records: see how many accounts were deleted, when, and whether by the student or an admin."]},{"v": "2026-11-06.4", "date": "6 Nov 2026", "items": ["Student records: delete a student's account completely on request (the student can also do it from their profile)."]},{"v": "2026-11-06.3", "date": "6 Nov 2026", "items": ["Privacy Policy link added at the bottom of the panel (share it with students and parents)."]},{"v": "2026-11-06.2", "date": "6 Nov 2026", "items": ["You will now see what is new whenever the panel is updated."]}, {"v": "2026-11-06.1", "date": "6 Nov 2026", "items": ["Security update: the panel only runs its own code; the Excel library is now served from this site.", "Students' practice and mock tests now load only the chosen topics (faster, less data)."]}, {"v": "2026-11-03.1", "date": "3 Nov 2026", "items": ["Today's challenge: set negative marking for a wrong answer (off, or -1 to -5 points)."]}, {"v": "2026-11-02.1", "date": "2 Nov 2026", "items": ["Live exam result PDF: 'Time taken' column instead of 'Submitted (IST)'."]}]/*END*/;
+const APP_NOTES = /*NOTES*/[{"v": "2026-11-12.3", "date": "12 Nov 2026", "items": ["Manage today now shows when each challenge closes. A challenge whose time is over shows CLOSED (students cannot see it) with a button to reopen it until 11:59 PM tonight."]},{"v": "2026-11-12.2", "date": "12 Nov 2026", "items": ["Resetting the challenge leaderboard now asks for your admin password to confirm."]},{"v": "2026-11-12.1", "date": "12 Nov 2026", "items": ["Daily challenge: reset today's or the overall leaderboard (or both) when you start a new challenge, with an optional notice to all students. The last reset can be undone."]},{"v": "2026-11-07.4", "date": "7 Nov 2026", "items": ["Dussehra effect: a bow in the corner now draws back and shoots burning arrows."]},{"v": "2026-11-07.3", "date": "7 Nov 2026", "items": ["Festival effects for Dussehra and New Year added. The tap effect now works on every button and link, and keeps working after you close the greeting."]},{"v": "2026-11-07.2", "date": "7 Nov 2026", "items": ["Festival greeting for institute admins can now be different from the students' greeting."]},{"v": "2026-11-07.1", "date": "7 Nov 2026", "items": ["Festival greetings in the admin panel too: crackers on Diwali, colours on Holi, and a burst on every button while the platform has them on."]},{"v": "2026-11-06.9", "date": "6 Nov 2026", "items": ["Small fixes."]},{"v": "2026-11-06.7", "date": "6 Nov 2026", "items": ["Reports are saved as PDF under the institute's name and the period (for example: Sunrise Academy - Institute Report - 01 Oct 2026 to 31 Oct 2026)."]},{"v": "2026-11-06.6", "date": "6 Nov 2026", "items": ["New 'Institute report': a complete report for any period (students, exams, toppers, tests, practice, challenge, reach) to print or save as PDF."]},{"v": "2026-11-06.5", "date": "6 Nov 2026", "items": ["Student records: see how many accounts were deleted, when, and whether by the student or an admin."]},{"v": "2026-11-06.4", "date": "6 Nov 2026", "items": ["Student records: delete a student's account completely on request (the student can also do it from their profile)."]},{"v": "2026-11-06.3", "date": "6 Nov 2026", "items": ["Privacy Policy link added at the bottom of the panel (share it with students and parents)."]},{"v": "2026-11-06.2", "date": "6 Nov 2026", "items": ["You will now see what is new whenever the panel is updated."]}, {"v": "2026-11-06.1", "date": "6 Nov 2026", "items": ["Security update: the panel only runs its own code; the Excel library is now served from this site.", "Students' practice and mock tests now load only the chosen topics (faster, less data)."]}, {"v": "2026-11-03.1", "date": "3 Nov 2026", "items": ["Today's challenge: set negative marking for a wrong answer (off, or -1 to -5 points)."]}, {"v": "2026-11-02.1", "date": "2 Nov 2026", "items": ["Live exam result PDF: 'Time taken' column instead of 'Submitted (IST)'."]}]/*END*/;
 const WN_KEY = 'dy_seen_version_admin';
 let updNewNotes = [];
 function wnParse(text){
@@ -3583,23 +3593,49 @@ document.getElementById('ch-lbr-notice').addEventListener('input', () => { lbrNo
 document.getElementById('ch-lbr-send').addEventListener('change', (e) => {
   document.getElementById('ch-lbr-notice').style.display = e.target.checked ? '' : 'none';
 });
-document.getElementById('btn-ch-lbr').addEventListener('click', async () => {
+// step 1: Reset shows what will happen and asks for the admin password
+function lbrCloseConfirm(){
+  document.getElementById('ch-lbr-confirm').style.display = 'none';
+  document.getElementById('ch-lbr-pass').value = ''; document.getElementById('ch-lbr-err').textContent = '';
+  document.getElementById('btn-ch-lbr').disabled = false;
+}
+document.getElementById('btn-ch-lbr').addEventListener('click', () => {
   const scope = document.getElementById('ch-lbr-scope').value;
   const send = document.getElementById('ch-lbr-send').checked;
   const notice = send ? document.getElementById('ch-lbr-notice').value.trim() : '';
   if (send && !notice){ toast('Please write the notice, or untick "Send a notice".', 'err'); return; }
-  if (!confirm(`Reset ${LBR_NAME[scope]}?\n\nEvery student starts again from 0 on ${scope === 'both' ? 'both boards' : 'this board'}. `
-      + `Lifetime points in My report are kept, and you can undo this reset.`
-      + (send ? '\n\nThis notice will be sent to all students:\n' + notice : '\n\nNo notice will be sent.'))) return;
-  const btn = document.getElementById('btn-ch-lbr'); btn.disabled = true;
+  document.getElementById('ch-lbr-confirm-text').textContent =
+    `Reset ${LBR_NAME[scope]}? Every student starts again from 0 on ${scope === 'both' ? 'both boards' : 'this board'}. `
+    + 'Lifetime points in My report are kept.\n'
+    + (send ? 'A notice will be sent to all students.' : 'No notice will be sent.');
+  document.getElementById('ch-lbr-err').textContent = '';
+  document.getElementById('ch-lbr-confirm').style.display = '';
+  document.getElementById('btn-ch-lbr').disabled = true;
+  document.getElementById('ch-lbr-pass').focus();
+});
+document.getElementById('btn-ch-lbr-cancel').addEventListener('click', lbrCloseConfirm);
+document.getElementById('ch-lbr-pass').addEventListener('keydown', (e) => { if (e.key === 'Enter') document.getElementById('btn-ch-lbr-go').click(); });
+// step 2: the server checks the password and resets
+document.getElementById('btn-ch-lbr-go').addEventListener('click', async () => {
+  const scope = document.getElementById('ch-lbr-scope').value;
+  const send = document.getElementById('ch-lbr-send').checked;
+  const notice = send ? document.getElementById('ch-lbr-notice').value.trim() : '';
+  const pass = document.getElementById('ch-lbr-pass').value;
+  const err = document.getElementById('ch-lbr-err');
+  if (!pass){ err.textContent = 'Please enter your password.'; return; }
+  const btn = document.getElementById('btn-ch-lbr-go'); btn.disabled = true; err.textContent = '';
   try{
-    const r = await rpc('admin_challenge_lb_reset', { ...adminCreds(), p_scope: scope, p_notice: notice });
+    const r = await rpc('admin_challenge_lb_reset', { p_admin_id: admin.adminId, p_admin_pass: pass, p_scope: scope, p_notice: notice });
     if (r && r.ok){
+      lbrCloseConfirm();
       toast(`Leaderboard reset (${r.students} student${r.students === 1 ? '' : 's'} were on it).` + (r.notice_id ? ' Notice sent.' : ''), 'ok');
       lbrNoticeEdited = false; loadChallengeLbInfo();
       if (cpanelOverall.classList.contains('active')) loadOverallLeaderboard();
-    } else toast((r && r.error) || 'Unable to reset the leaderboard.', 'err');
-  }catch(e){ toast('Connection error.', 'err'); }
+    } else if (r && r.error === 'unauthorized'){
+      err.textContent = 'Incorrect password. (After several wrong tries, sign-in is paused for a few minutes.)';
+      document.getElementById('ch-lbr-pass').select();
+    } else err.textContent = (r && r.error) || 'Unable to reset the leaderboard.';
+  }catch(e){ err.textContent = 'Connection error. Nothing was reset.'; }
   btn.disabled = false;
 });
 document.getElementById('btn-ch-lbr-undo').addEventListener('click', async () => {
@@ -3885,17 +3921,29 @@ function renderChallengeManageList(list, countMap){
     card.className = 'ch-manage-card';
     const active = !!ch.is_active;
     const participants = countMap[ch.id] || 0;
+    // real status: a challenge past its closing time is closed even if it is switched on
+    const endAt = ch.expires_at ? new Date(ch.expires_at) : null;
+    const closed = !!endAt && endAt.getTime() <= Date.now();
+    const endTxt = endAt ? (() => {
+      const shown = new Date(endAt.getTime() - 1);            // midnight is shown as 11:59 PM
+      const sameDay = shown.toDateString() === new Date().toDateString();
+      return shown.toLocaleString('en-IN', sameDay ? { hour: 'numeric', minute: '2-digit' } : { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })
+             + (sameDay ? ' today' : '');
+    })() : '';
+    const pill = !active ? ['ch-locked', 'LOCKED'] : closed ? ['ch-locked', 'CLOSED'] : ['ch-active', 'ACTIVE'];
     card.innerHTML = `
       <div class="ch-manage-top">
-        <span class="ch-status-pill ${active ? 'ch-active' : 'ch-locked'}">${active ? 'ACTIVE' : 'LOCKED'}</span>
+        <span class="ch-status-pill ${pill[0]}">${pill[1]}</span>
         <span style="font-size:11px; color:var(--text-mute);">${esc(ch.topic || 'General')} · ${ch.time_limit_seconds || 120}s</span>
         <button class="ch-participants-btn" style="margin-left:auto;">👥 ${participants} participant${participants===1?'':'s'} ${participants > 0 ? '▾' : ''}</button>
       </div>
       <div class="ch-manage-q">${esc((ch.question || '').slice(0,90))}${(ch.question||'').length>90?'…':''}</div>
+      ${endTxt ? `<div style="font-size:12px; margin:-2px 0 6px; color:${closed ? 'var(--danger)' : 'var(--text-mute)'};">${closed ? '⛔ Closed at ' : '⏳ Open until '}${esc(endTxt)}${closed ? ' · students cannot see it' : ''}</div>` : ''}
       ${ch.image_url ? `<img src="${esc(ch.image_url)}" style="max-width:160px; max-height:100px; border-radius:6px; margin:2px 0 8px; display:block; object-fit:cover;">` : ''}
       <div class="ch-participants-panel" style="display:none;"></div>
       <div class="ch-manage-actions">
-        <button class="btn btn-ghost btn-sm btn-toggle">${active ? 'Lock' : 'Unlock'}</button>
+        ${closed ? `<button class="btn btn-primary btn-sm btn-reopen">🔓 Reopen till 11:59 PM tonight</button>`
+                 : `<button class="btn btn-ghost btn-sm btn-toggle">${active ? 'Lock' : 'Unlock'}</button>`}
         <button class="btn btn-danger btn-sm btn-del">Delete</button>
       </div>`;
 
@@ -3930,7 +3978,17 @@ function renderChallengeManageList(list, countMap){
       }
     });
 
-    card.querySelector('.btn-toggle').addEventListener('click', async () => {
+    const reopenBtn = card.querySelector('.btn-reopen');
+    if (reopenBtn) reopenBtn.addEventListener('click', async () => {
+      reopenBtn.disabled = true;
+      try{
+        const r = await rpc('admin_challenge_reopen', { ...adminCreds(), p_challenge_id: ch.id });
+        if (r && r.ok){ toast('Challenge reopened. Students can answer it until 11:59 PM tonight.', 'ok'); loadChallengeManage(); }
+        else { toast((r && r.error) || 'Unable to reopen (database update 081 needed).', 'err'); reopenBtn.disabled = false; }
+      }catch(err){ toast('Connection error.', 'err'); reopenBtn.disabled = false; }
+    });
+    const toggleBtn = card.querySelector('.btn-toggle');
+    if (toggleBtn) toggleBtn.addEventListener('click', async () => {
       try{
         const ok = await rpc('admin_toggle_challenge', { p_admin_id: admin.adminId, p_admin_pass: admin.adminPass, p_challenge_id: ch.id, p_active: !active });
         if (ok){ toast(active ? 'Challenge locked.' : 'Challenge unlocked.', 'ok'); loadChallengeManage(); }
